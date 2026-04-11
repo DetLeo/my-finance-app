@@ -1,0 +1,1144 @@
+import { useState, useMemo, useEffect, useRef } from "react";
+import {
+  Home, Wallet, UtensilsCrossed, ReceiptText, TrendingUp,
+  Landmark, BarChart2, DollarSign, ArrowLeftRight,
+  ArrowDownCircle, ArrowUpCircle, CalendarMinus, CalendarPlus,
+  Camera, ClipboardList, Save, PiggyBank, ChevronRight, Sun, Palmtree
+} from "lucide-react";
+
+const SAGE = "#5C6E52";
+const SAGE_DARK = "#4a5942";
+const SAGE_LIGHT = "#8fa882";
+const BG = "#f2f0eb";
+const CARD = "#ffffff";
+const RED = "#c0392b";
+const GOLD = "#b5873a";
+const BLUE = "#3a6b8a";
+const PURPLE = "#7a5a8a";
+
+const PAGES = ["overview", "assets", "food", "accounts", "forecast"];
+const MONTHS = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+
+const ASSET_TYPES = [
+  { key: "cash",    label: "現金／存款", icon: <Landmark size={18} />,       color: SAGE,   colorBg: "#e8f0e5" },
+  { key: "stock",   label: "股票／基金", icon: <BarChart2 size={18} />,       color: BLUE,   colorBg: "#e5eef5" },
+  { key: "ustock",  label: "美股持倉",   icon: <DollarSign size={18} />,      color: PURPLE, colorBg: "#f0ecf5" },
+  { key: "foreign", label: "外幣資產",   icon: <ArrowLeftRight size={18} />,  color: GOLD,   colorBg: "#f5ede0" },
+];
+
+const CURRENCY_RATES = { TWD: 1, USD: 32.5, JPY: 0.22, EUR: 35.5, HKD: 4.2 };
+const CURRENCY_LABELS = { TWD: "NT$", USD: "US$", JPY: "¥", EUR: "€", HKD: "HK$" };
+
+const DEFAULT_ASSETS = { cash: [], stock: [], ustock: [], foreign: [] };
+const DEFAULT_EXPENSES = [];
+const DEFAULT_INCOME = [];
+const DEFAULT_ONETIME = [];
+const DEFAULT_ONETIME_INCOME = [];
+const DEFAULT_SNAPSHOTS = [];
+const DEFAULT_FOOD = { weekdayB: 50, weekdayL: 100, weekdayD: 100, weekendB: 80, weekendL: 150, weekendD: 150 };
+
+function loadData(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+
+function saveData(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+function formatNT(n) { return "NT$" + Math.round(n).toLocaleString(); }
+function toTWD(amount, currency = "TWD") { return amount * (CURRENCY_RATES[currency] || 1); }
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+}
+function calcTotal(assets) {
+  return Object.entries(assets).reduce((sum, [type, items]) => {
+    if (type === "ustock") {
+      return sum + (items || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD"), 0);
+    }
+    return sum + (items || []).reduce((s, item) =>
+      s + toTWD(item.amount, type === "foreign" ? item.currency : "TWD"), 0);
+  }, 0);
+}
+function truncate(str) {
+  if (!str) return "";
+  return str.length > 5 ? str.slice(0, 5) + "…" : str;
+}
+function calcFoodMonthly(food) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const days = new Date(year, month + 1, 0).getDate();
+  let weekdays = 0, weekends = 0;
+  for (let d = 1; d <= days; d++) {
+    const day = new Date(year, month, d).getDay();
+    if (day === 0 || day === 6) weekends++;
+    else weekdays++;
+  }
+  return weekdays * ((food.weekdayB||0) + (food.weekdayL||0) + (food.weekdayD||0)) +
+         weekends * ((food.weekendB||0) + (food.weekendL||0) + (food.weekendD||0));
+}
+
+function shouldAppear(item, calMonth, calYear) {
+  if (item.repeat === "once") {
+    const itemYear = item.year || new Date().getFullYear();
+    return item.month === calMonth && itemYear === calYear;
+  }
+  if (item.repeat === "fixed") {
+    const startM = item.month;
+    const startY = item.year || new Date().getFullYear();
+    const totalMonthsDiff = (calYear - startY) * 12 + (calMonth - startM);
+    return totalMonthsDiff >= 0 && totalMonthsDiff < (item.times || 1);
+  }
+  return item.month === calMonth;
+}
+
+function ProgressBar({ value, max, color = SAGE }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div style={{ background: "#e0ddd7", borderRadius: 99, height: 6, overflow: "hidden" }}>
+      <div style={{ width: pct+"%", background: color, height: "100%", borderRadius: 99, transition: "width 0.6s ease" }} />
+    </div>
+  );
+}
+
+function Card({ children, style = {} }) {
+  return (
+    <div style={{ background: CARD, borderRadius: 20, padding: "18px 20px",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)", ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function Tab({ label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      flex: 1, padding: "10px 0", border: "none", borderRadius: 12,
+      background: active ? SAGE : "transparent",
+      color: active ? "#fff" : "#888", fontWeight: active ? 700 : 400,
+      fontSize: 13, cursor: "pointer", transition: "all 0.2s",
+      fontFamily: "'Noto Sans TC', sans-serif"
+    }}>{label}</button>
+  );
+}
+
+function NavItem({ icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      flex: 1, border: "none", background: "none", display: "flex",
+      flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", padding: "8px 0"
+    }}>
+      <span style={{ color: active ? SAGE : "#aaa", display: "flex" }}>{icon}</span>
+      <span style={{ fontSize: 11, color: active ? SAGE : "#aaa", fontWeight: active ? 700 : 400,
+        fontFamily: "'Noto Sans TC', sans-serif" }}>{label}</span>
+      {active && <div style={{ width: 4, height: 4, borderRadius: 99, background: SAGE, marginTop: -2 }} />}
+    </button>
+  );
+}
+
+function OneTimeList({ items, color, icon }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!items || items.length === 0) return null;
+  return (
+    <div style={{ marginTop: 6, display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+      {!expanded ? (
+        <div onClick={() => setExpanded(true)}
+          style={{ background: color === RED ? "#fde8e5" : "#e8f0e5", borderRadius: 8, padding: "3px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ color, display: "flex" }}>{icon}</span>
+          <span style={{ fontSize: 11, color, fontWeight: 700, fontFamily: "'Noto Sans TC', sans-serif" }}>
+            {items.length}項 ···
+          </span>
+        </div>
+      ) : (
+        <>
+          {items.map(o => (
+            <div key={o.id} style={{ background: color === RED ? "#fde8e5" : "#e8f0e5", borderRadius: 8, padding: "3px 10px", display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ color, display: "flex" }}>{icon}</span>
+              <span style={{ fontSize: 11, color, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif", whiteSpace: "nowrap" }}>
+                {truncate(o.name)} {color === RED ? "-" : "+"}{formatNT(o.amount)}
+              </span>
+            </div>
+          ))}
+          <div onClick={() => setExpanded(false)}
+            style={{ background: "#e8e5df", borderRadius: 8, padding: "3px 10px", cursor: "pointer" }}>
+            <span style={{ fontSize: 11, color: "#888", fontWeight: 700 }}>↑</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SwipeContainer({ pageIndex, setPageIndex, children }) {
+  const containerRef = useRef(null);
+  const startXRef = useRef(null);
+  const startYRef = useRef(null);
+  const currentXRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const isHorizontalRef = useRef(null);
+  const WIDTH = typeof window !== "undefined" ? window.innerWidth : 390;
+  const THRESHOLD = WIDTH * 0.4;
+  const SPRING = "cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+
+  const setTranslate = (x, animated) => {
+    if (!containerRef.current) return;
+    containerRef.current.style.transition = animated ? `transform 350ms ${SPRING}` : "none";
+    containerRef.current.style.transform = `translateX(${x}px)`;
+  };
+
+  const onTouchStart = (e) => {
+    startXRef.current = e.touches[0].clientX;
+    startYRef.current = e.touches[0].clientY;
+    isDraggingRef.current = true;
+    isHorizontalRef.current = null;
+    setTranslate(-pageIndex * WIDTH, false);
+  };
+
+  const onTouchMove = (e) => {
+    if (!isDraggingRef.current) return;
+    const dx = e.touches[0].clientX - startXRef.current;
+    const dy = e.touches[0].clientY - startYRef.current;
+    if (isHorizontalRef.current === null) {
+      isHorizontalRef.current = Math.abs(dx) > Math.abs(dy);
+    }
+    if (!isHorizontalRef.current) return;
+    e.preventDefault();
+    const base = -pageIndex * WIDTH;
+    let x = base + dx;
+    if (pageIndex === 0 && dx > 0) x = base + dx * 0.2;
+    if (pageIndex === PAGES.length - 1 && dx < 0) x = base + dx * 0.2;
+    currentXRef.current = dx;
+    setTranslate(x, false);
+  };
+
+  const onTouchEnd = () => {
+    if (!isDraggingRef.current || !isHorizontalRef.current) {
+      isDraggingRef.current = false;
+      return;
+    }
+    isDraggingRef.current = false;
+    const dx = currentXRef.current;
+    let newIndex = pageIndex;
+    if (dx < -THRESHOLD && pageIndex < PAGES.length - 1) newIndex = pageIndex + 1;
+    else if (dx > THRESHOLD && pageIndex > 0) newIndex = pageIndex - 1;
+    setPageIndex(newIndex);
+    setTranslate(-newIndex * WIDTH, true);
+  };
+
+  useEffect(() => {
+    setTranslate(-pageIndex * WIDTH, true);
+  }, [pageIndex]);
+
+  return (
+    <div style={{ overflow: "hidden", flex: 1, position: "relative" }}>
+      <div
+        ref={containerRef}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{
+          display: "flex",
+          width: `${PAGES.length * 100}%`,
+          height: "100%",
+          transform: `translateX(-${pageIndex * WIDTH}px)`,
+          willChange: "transform",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, oneTimeIncome, oneTime, food }) {
+  const totalTWD = calcTotal(assets);
+  const foodMonthly = calcFoodMonthly(food);
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  const thisMonthOneTimeIncome = oneTimeIncome.filter(o => shouldAppear(o, currentMonth, currentYear));
+  const thisMonthOneTime = oneTime.filter(o => shouldAppear(o, currentMonth, currentYear));
+  const thisMonthExtraIncome = thisMonthOneTimeIncome.reduce((s, o) => s + o.amount, 0);
+  const thisMonthExtraExpense = thisMonthOneTime.reduce((s, o) => s + o.amount, 0);
+
+  const fixedExpense = expenses.reduce((s, e) => s + e.amount, 0) + foodMonthly;
+  const fixedIncome  = income.reduce((s, i) => s + i.amount, 0);
+  const totalExpense = fixedExpense + thisMonthExtraExpense;
+  const totalIncome  = fixedIncome + thisMonthExtraIncome;
+  const netMonthly   = totalIncome - totalExpense;
+  const savingsRate  = fixedIncome > 0 ? Math.round(((fixedIncome - fixedExpense) / fixedIncome) * 100) : 0;
+
+  const typeTotals = Object.fromEntries(ASSET_TYPES.map(t => [
+    t.key,
+    t.key === "ustock"
+      ? (assets.ustock || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD"), 0)
+      : (assets[t.key] || []).reduce((s, item) =>
+          s + toTWD(item.amount, t.key === "foreign" ? item.currency : "TWD"), 0)
+  ]));
+  const lastSnap = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+  const diff = lastSnap ? totalTWD - lastSnap.total : null;
+  const daysSince = lastSnap ? Math.round((Date.now() - lastSnap.ts) / 86400000) : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 24, padding: "24px 22px", color: "#fff" }}>
+        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>總資產（折合台幣）</div>
+        <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(totalTWD)}</div>
+        <div style={{ display: "flex", gap: 3, marginTop: 14, borderRadius: 99, overflow: "hidden", height: 8 }}>
+          {ASSET_TYPES.map(t => (
+            <div key={t.key} style={{ flex: typeTotals[t.key] || 0.001, background: t.key === "cash" ? "rgba(255,255,255,0.85)" : t.key === "stock" ? "rgba(255,255,255,0.6)" : t.key === "ustock" ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.25)" }} />
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          {ASSET_TYPES.map(t => (
+            <div key={t.key} style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 14, padding: "8px 4px", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", color: "#fff", opacity: 0.9 }}>{t.icon}</div>
+              <div style={{ fontSize: 9, opacity: 0.75, marginTop: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>{t.key === "cash" ? "存款" : t.key === "stock" ? "股票" : t.key === "ustock" ? "美股" : "外幣"}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(typeTotals[t.key])}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <Camera size={16} color={SAGE} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>與上次紀錄比較</span>
+        </div>
+        {lastSnap ? (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#999", fontFamily: "'Noto Sans TC', sans-serif" }}>上次紀錄</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#555", fontFamily: "'Noto Sans TC', sans-serif" }}>{lastSnap.date}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#999", fontFamily: "'Noto Sans TC', sans-serif" }}>當時總資產</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#555", fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(lastSnap.total)}</div>
+              </div>
+            </div>
+            <div style={{ background: diff >= 0 ? "#e8f0e5" : "#fde8e5", borderRadius: 14, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#888", fontFamily: "'Noto Sans TC', sans-serif" }}>{daysSince === 0 ? "今天" : `${daysSince} 天`}間資產變動</div>
+                <div style={{ fontSize: 11, color: "#aaa", marginTop: 2, fontFamily: "'Noto Sans TC', sans-serif" }}>{diff < 0 ? `淨消費約 ${formatNT(Math.abs(diff))}` : `淨增加約 ${formatNT(diff)}`}</div>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: diff >= 0 ? SAGE : RED, fontFamily: "'Noto Sans TC', sans-serif" }}>{diff >= 0 ? "+" : ""}{formatNT(diff)}</div>
+            </div>
+            {snapshots.length > 1 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 12, color: "#bbb", marginBottom: 6, fontFamily: "'Noto Sans TC', sans-serif" }}>歷史紀錄</div>
+                {[...snapshots].reverse().slice(0, 5).map((s) => (
+                  <div key={s.ts} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid #f5f2ee" }}>
+                    <span style={{ fontSize: 12, color: "#888", fontFamily: "'Noto Sans TC', sans-serif" }}>{s.date}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#444", fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(s.total)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ textAlign: "center", padding: "16px 0", color: "#bbb" }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}><ClipboardList size={36} color="#ddd" /></div>
+            <div style={{ fontSize: 13, fontFamily: "'Noto Sans TC', sans-serif" }}>還沒有紀錄，按下方按鈕儲存今天的資產快照</div>
+          </div>
+        )}
+        <button onClick={onSaveSnapshot} style={{ width: "100%", marginTop: 14, padding: "13px", background: SAGE, color: "#fff", border: "none", borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <Save size={16} color="#fff" />
+          儲存今天的資產快照（{todayStr()}）
+        </button>
+      </Card>
+
+      <Card>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#333", marginBottom: 12, fontFamily: "'Noto Sans TC', sans-serif" }}>本月現金流</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          {[
+            { label: "月收入", val: totalIncome, color: SAGE, icon: <ArrowUpCircle size={14} color={SAGE} /> },
+            { label: "月支出", val: totalExpense, color: RED, icon: <ArrowDownCircle size={14} color={RED} /> },
+            { label: "月結餘", val: netMonthly, color: netMonthly >= 0 ? SAGE : RED, icon: <TrendingUp size={14} color={netMonthly >= 0 ? SAGE : RED} /> }
+          ].map(({ label, val, color, icon }) => (
+            <div key={label} style={{ flex: 1, background: BG, borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>{icon}</div>
+              <div style={{ fontSize: 11, color: "#888", marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>{label}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(val)}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <PiggyBank size={16} color={SAGE} />
+            <span style={{ fontSize: 14, color: "#555", fontFamily: "'Noto Sans TC', sans-serif" }}>本月儲蓄率</span>
+          </div>
+          <span style={{ background: savingsRate >= 20 ? "#e8f0e5" : "#fde8e5", color: savingsRate >= 20 ? SAGE : RED, borderRadius: 99, padding: "3px 12px", fontSize: 13, fontWeight: 700, fontFamily: "'Noto Sans TC', sans-serif" }}>{savingsRate}%</span>
+        </div>
+        <ProgressBar value={fixedIncome - fixedExpense} max={fixedIncome} color={savingsRate >= 20 ? SAGE : RED} />
+        <div style={{ marginTop: 8, fontSize: 12, color: "#999", fontFamily: "'Noto Sans TC', sans-serif" }}>固定收支基準，不含特定收支</div>
+      </Card>
+    </div>
+  );
+}
+function AssetsPage({ assets, setAssets }) {
+  const [activeType, setActiveType] = useState("cash");
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", amount: "", currency: "USD", note: "", shares: "", price: "" });
+  const [editId, setEditId] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editShares, setEditShares] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const addRef = useRef(null);
+
+  const totalTWD = useMemo(() => calcTotal(assets), [assets]);
+  const typeTotals = useMemo(() => Object.fromEntries(ASSET_TYPES.map(t => [
+    t.key,
+    t.key === "ustock"
+      ? (assets.ustock || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD"), 0)
+      : (assets[t.key] || []).reduce((s, item) =>
+          s + toTWD(item.amount, t.key === "foreign" ? item.currency : "TWD"), 0)
+  ])), [assets]);
+
+  const activeItems = assets[activeType] || [];
+  const activeInfo = ASSET_TYPES.find(t => t.key === activeType);
+
+  const handleShowAdd = () => {
+    setShowAdd(!showAdd);
+    setTimeout(() => { addRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100);
+  };
+
+  const addItem = () => {
+    if (!form.name) return;
+    if (activeType === "ustock") {
+      if (!form.shares || !form.price) return;
+      setAssets(prev => ({ ...prev, ustock: [...(prev.ustock || []), {
+        id: Date.now(), name: form.name,
+        shares: parseFloat(form.shares) || 0,
+        price: parseFloat(form.price) || 0,
+        note: form.note
+      }]}));
+    } else {
+      if (!form.amount) return;
+      setAssets(prev => ({ ...prev, [activeType]: [...(prev[activeType] || []), {
+        id: Date.now(), name: form.name, amount: parseFloat(form.amount) || 0, note: form.note,
+        ...(activeType === "foreign" ? { currency: form.currency } : {})
+      }]}));
+    }
+    setForm({ name: "", amount: "", currency: "USD", note: "", shares: "", price: "" });
+    setShowAdd(false);
+  };
+
+  const removeItem = (id) => setAssets(prev => ({ ...prev, [activeType]: (prev[activeType] || []).filter(i => i.id !== id) }));
+
+  const saveEdit = (id) => {
+    if (activeType === "ustock") {
+      setAssets(prev => ({
+        ...prev, ustock: (prev.ustock || []).map(i => i.id === id ? {
+          ...i, name: editName || i.name,
+          shares: parseFloat(editShares) || i.shares,
+          price: parseFloat(editPrice) || i.price
+        } : i)
+      }));
+    } else {
+      const val = parseFloat(editVal);
+      if (!isNaN(val)) setAssets(prev => ({
+        ...prev, [activeType]: (prev[activeType] || []).map(i => i.id === id ? { ...i, amount: val, name: editName || i.name } : i)
+      }));
+    }
+    setEditId(null); setEditVal(""); setEditName(""); setEditShares(""); setEditPrice("");
+  };
+
+  const inputStyle = { padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none" };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 24, padding: "24px 22px", color: "#fff" }}>
+        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>資產總額（折合台幣）</div>
+        <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(totalTWD)}</div>
+        <div style={{ display: "flex", gap: 3, marginTop: 16, borderRadius: 99, overflow: "hidden", height: 8 }}>
+          {ASSET_TYPES.map(t => (<div key={t.key} style={{ flex: typeTotals[t.key] || 0.001, background: t.key === "cash" ? "rgba(255,255,255,0.85)" : t.key === "stock" ? "rgba(255,255,255,0.6)" : t.key === "ustock" ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.25)" }} />))}
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
+          {ASSET_TYPES.map(t => (
+            <div key={t.key} style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 14, padding: "8px 4px", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", color: "#fff", opacity: 0.9 }}>{t.icon}</div>
+              <div style={{ fontSize: 9, opacity: 0.8, marginTop: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>{t.key === "cash" ? "存款" : t.key === "stock" ? "股票" : t.key === "ustock" ? "美股" : "外幣"}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(typeTotals[t.key])}</div>
+              <div style={{ fontSize: 9, opacity: 0.6, fontFamily: "'Noto Sans TC', sans-serif" }}>{totalTWD > 0 ? Math.round((typeTotals[t.key] / totalTWD) * 100) : 0}%</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Card>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#333", marginBottom: 12, fontFamily: "'Noto Sans TC', sans-serif" }}>資產配置比例</div>
+        {ASSET_TYPES.map(t => (
+          <div key={t.key} style={{ marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ color: t.color, display: "flex" }}>{t.icon}</span>
+                <span style={{ fontSize: 13, color: "#555", fontFamily: "'Noto Sans TC', sans-serif" }}>{t.label}</span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: t.color, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(typeTotals[t.key])}</span>
+            </div>
+            <ProgressBar value={typeTotals[t.key]} max={totalTWD} color={t.color} />
+          </div>
+        ))}
+      </Card>
+
+      <div style={{ display: "flex", background: "#e8e5df", borderRadius: 14, padding: 4, gap: 4 }}>
+        {ASSET_TYPES.map(t => (
+          <button key={t.key} onClick={() => { setActiveType(t.key); setShowAdd(false); }}
+            style={{ flex: 1, padding: "10px 0", border: "none", borderRadius: 12,
+              background: activeType === t.key ? SAGE : "transparent",
+              color: activeType === t.key ? "#fff" : t.color,
+              cursor: "pointer", transition: "all 0.2s", display: "flex", justifyContent: "center", alignItems: "center" }}>
+            {t.icon}
+          </button>
+        ))}
+      </div>
+
+      <Card style={{ padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+          <span style={{ color: activeInfo.color, display: "flex" }}>{activeInfo.icon}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{activeInfo.label}</span>
+        </div>
+        {activeItems.map(item => {
+          const twdVal = activeType === "ustock"
+            ? toTWD(item.shares * item.price, "USD")
+            : toTWD(item.amount, activeType === "foreign" ? item.currency : "TWD");
+          return (
+            <div key={item.id} style={{ padding: "11px 0", borderBottom: "1px solid #f0ede8" }}>
+              {editId === item.id ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="名稱"
+                    style={{ ...inputStyle, border: `1px solid ${activeInfo.color}`, width: "100%", boxSizing: "border-box" }} />
+                  {activeType === "ustock" ? (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input type="number" value={editShares} onChange={e => setEditShares(e.target.value)} placeholder="股數"
+                        style={{ ...inputStyle, flex: 1, minWidth: 0, border: `1px solid ${activeInfo.color}` }} />
+                      <input type="number" value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="收盤價USD"
+                        style={{ ...inputStyle, flex: 1, minWidth: 0, border: `1px solid ${activeInfo.color}` }} />
+                    </div>
+                  ) : (
+                    <input type="number" value={editVal} onChange={e => setEditVal(e.target.value)} placeholder="金額"
+                      style={{ ...inputStyle, border: `1px solid ${activeInfo.color}`, width: "100%", boxSizing: "border-box" }} />
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => saveEdit(item.id)} style={{ flex: 1, background: activeInfo.color, color: "#fff", border: "none", borderRadius: 8, padding: "8px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>儲存</button>
+                    <button onClick={() => { setEditId(null); setEditVal(""); setEditName(""); setEditShares(""); setEditPrice(""); }}
+                      style={{ flex: 1, background: "#eee", color: "#666", border: "none", borderRadius: 8, padding: "8px", cursor: "pointer", fontSize: 14 }}>取消</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 12, background: activeInfo.colorBg, display: "flex", alignItems: "center", justifyContent: "center", color: activeInfo.color, flexShrink: 0 }}>
+                      {activeInfo.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.name}</div>
+                      <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>
+                        {activeType === "ustock" ? `${item.shares}股 × US$${item.price}` : item.note || (activeType === "foreign" ? item.currency : "台幣")}
+                        {activeType === "foreign" && ` · ${CURRENCY_LABELS[item.currency]}${item.amount.toLocaleString()}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ textAlign: "right", cursor: "pointer" }} onClick={() => {
+                      setEditId(item.id); setEditName(item.name);
+                      if (activeType === "ustock") { setEditShares(String(item.shares)); setEditPrice(String(item.price)); }
+                      else setEditVal(String(item.amount));
+                    }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: activeInfo.color, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(twdVal)}</div>
+                      <div style={{ fontSize: 10, color: "#bbb", fontFamily: "'Noto Sans TC', sans-serif" }}>點擊編輯</div>
+                    </div>
+                    <button onClick={() => removeItem(item.id)} style={{ border: "none", background: "#fde8e5", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <button onClick={handleShowAdd} style={{ width: "100%", marginTop: 12, padding: "12px", border: `2px dashed ${activeInfo.color}44`, borderRadius: 14, background: "none", cursor: "pointer", color: activeInfo.color, fontSize: 14, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          + 新增{activeInfo.label}
+        </button>
+
+        {showAdd && (
+          <div ref={addRef} style={{ marginTop: 12, padding: 14, background: BG, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            <input type="text" placeholder="名稱" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              style={{ ...inputStyle, padding: "10px 14px", border: "1px solid #ddd", width: "100%", boxSizing: "border-box" }} />
+            {activeType === "ustock" ? (
+              <>
+                <input type="number" placeholder="持有股數" value={form.shares} onChange={e => setForm(p => ({ ...p, shares: e.target.value }))}
+                  style={{ ...inputStyle, padding: "10px 14px", border: "1px solid #ddd", width: "100%", boxSizing: "border-box" }} />
+                <input type="number" placeholder="當日收盤價（USD）" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))}
+                  style={{ ...inputStyle, padding: "10px 14px", border: "1px solid #ddd", width: "100%", boxSizing: "border-box" }} />
+              </>
+            ) : (
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="number" placeholder="金額" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))}
+                  style={{ ...inputStyle, flex: 1, minWidth: 0, padding: "10px 14px", border: "1px solid #ddd" }} />
+                {activeType === "foreign" && (
+                  <select value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}
+                    style={{ ...inputStyle, width: 80, padding: "10px 8px", border: "1px solid #ddd" }}>
+                    {Object.keys(CURRENCY_RATES).filter(c => c !== "TWD").map(c => <option key={c}>{c}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+            <input type="text" placeholder="備註（選填）" value={form.note} onChange={e => setForm(p => ({ ...p, note: e.target.value }))}
+              style={{ ...inputStyle, padding: "10px 14px", border: "1px solid #ddd", width: "100%", boxSizing: "border-box" }} />
+            <button onClick={addItem} style={{ background: activeInfo.color, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+function FoodPage({ food, setFood }) {
+  const monthly = calcFoodMonthly(food);
+  const fields = [
+    { label: "早餐", key: "weekdayB", section: "平日" },
+    { label: "午餐", key: "weekdayL", section: "平日" },
+    { label: "晚餐", key: "weekdayD", section: "平日" },
+    { label: "早餐", key: "weekendB", section: "假日" },
+    { label: "午餐", key: "weekendL", section: "假日" },
+    { label: "晚餐", key: "weekendD", section: "假日" },
+  ];
+
+  const handleBlur = (key, val) => {
+    const n = parseInt(val) || 0;
+    setFood(prev => ({ ...prev, [key]: n }));
+  };
+
+  const inputStyle = {
+    padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd",
+    fontSize: 15, fontFamily: "'Noto Sans TC', sans-serif",
+    color: "#333", background: "#fff", outline: "none",
+    width: 90, textAlign: "right", boxSizing: "border-box"
+  };
+
+  const weekday = fields.filter(f => f.section === "平日");
+  const weekend = fields.filter(f => f.section === "假日");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 24, padding: "24px 22px", color: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <UtensilsCrossed size={16} color="rgba(255,255,255,0.8)" />
+          <span style={{ fontSize: 13, opacity: 0.8, fontFamily: "'Noto Sans TC', sans-serif" }}>本月伙食費估算</span>
+        </div>
+        <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(monthly)}</div>
+        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6, fontFamily: "'Noto Sans TC', sans-serif" }}>依本月平日／假日天數自動計算，已加入月支出</div>
+      </div>
+
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <Sun size={16} color={SAGE} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>平日</span>
+        </div>
+        {weekday.map(f => (
+          <div key={f.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f0ede8" }}>
+            <span style={{ fontSize: 14, color: "#555", fontFamily: "'Noto Sans TC', sans-serif" }}>{f.label}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "#aaa" }}>NT$</span>
+              <input type="number" defaultValue={food[f.key]} onBlur={e => handleBlur(f.key, e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+        ))}
+      </Card>
+
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <Palmtree size={16} color={GOLD} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>假日</span>
+        </div>
+        {weekend.map(f => (
+          <div key={f.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f0ede8" }}>
+            <span style={{ fontSize: 14, color: "#555", fontFamily: "'Noto Sans TC', sans-serif" }}>{f.label}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "#aaa" }}>NT$</span>
+              <input type="number" defaultValue={food[f.key]} onBlur={e => handleBlur(f.key, e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+        ))}
+      </Card>
+
+      <Card>
+        <div style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", lineHeight: 1.6 }}>
+          💡 輸入完金額後點其他地方完成輸入，系統自動計算本月伙食費並加入月支出。
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOneTime, oneTimeIncome, setOneTimeIncome }) {
+  const [activeTab, setActiveTab] = useState("expense");
+  const [showAdd, setShowAdd] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const [form, setForm] = useState({ name: "", amount: "", category: "住", date: 25, month: new Date().getMonth()+1, day: 1, repeat: "loop", times: 3, year: currentYear });
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const addRef = useRef(null);
+
+  const categories = ["住", "通訊", "訂閱", "保障", "交通", "其他"];
+  const catColors = { "住": SAGE, "通訊": "#7a9b6e", "訂閱": GOLD, "保障": "#8a7a6a", "交通": "#6a8a7a", "其他": "#999" };
+
+  const handleShowAdd = () => {
+    setShowAdd(!showAdd);
+    setTimeout(() => { addRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100);
+  };
+
+  const repeatLabel = (item) => {
+    if (item.repeat === "once") return `一次性 ${item.year || currentYear}年`;
+    if (item.repeat === "fixed") return `共${item.times}個月`;
+    return "每年循環";
+  };
+
+  const addItem = () => {
+    if (!form.name || !form.amount) return;
+    const base = { id: Date.now(), name: form.name, amount: parseInt(form.amount) };
+    if (activeTab === "expense") {
+      setExpenses(prev => [...prev, { ...base, category: form.category, color: catColors[form.category] || SAGE }]);
+    } else if (activeTab === "income") {
+      setIncome(prev => [...prev, { ...base, date: parseInt(form.date) || 25 }]);
+    } else if (activeTab === "onetime") {
+      setOneTime(prev => [...prev, { ...base, month: parseInt(form.month), day: parseInt(form.day), repeat: form.repeat, times: parseInt(form.times) || 3, year: parseInt(form.year) }]);
+    } else {
+      setOneTimeIncome(prev => [...prev, { ...base, month: parseInt(form.month), day: parseInt(form.day), repeat: form.repeat, times: parseInt(form.times) || 3, year: parseInt(form.year) }]);
+    }
+    setForm({ name: "", amount: "", category: "住", date: 25, month: new Date().getMonth()+1, day: 1, repeat: "loop", times: 3, year: currentYear });
+    setShowAdd(false);
+  };
+
+  const removeExpense = (id) => setExpenses(prev => prev.filter(e => e.id !== id));
+  const removeIncome  = (id) => setIncome(prev => prev.filter(i => i.id !== id));
+  const removeOneTime = (id) => setOneTime(prev => prev.filter(o => o.id !== id));
+  const removeOneTimeIncome = (id) => setOneTimeIncome(prev => prev.filter(o => o.id !== id));
+
+  const startEdit = (item, type) => { setEditId(item.id + "_" + type); setEditForm({ ...item }); };
+  const saveEdit = (type) => {
+    if (type === "expense") setExpenses(prev => prev.map(i => i.id === editForm.id ? { ...i, ...editForm } : i));
+    else if (type === "income") setIncome(prev => prev.map(i => i.id === editForm.id ? { ...i, ...editForm } : i));
+    else if (type === "onetime") setOneTime(prev => prev.map(i => i.id === editForm.id ? { ...i, ...editForm } : i));
+    else setOneTimeIncome(prev => prev.map(i => i.id === editForm.id ? { ...i, ...editForm } : i));
+    setEditId(null); setEditForm({});
+  };
+
+  const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
+  const totalIncome  = income.reduce((s, i) => s + i.amount, 0);
+  const totalOneTime = oneTime.reduce((s, o) => s + o.amount, 0);
+  const totalOneTimeIncome = oneTimeIncome.reduce((s, o) => s + o.amount, 0);
+
+  const inputStyle = { padding: "10px 14px", borderRadius: 10, border: "1px solid #ddd", fontSize: 14, fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none" };
+
+  const EditRow = ({ item, type }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 0" }}>
+      <input value={editForm.name || ""} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+        style={{ ...inputStyle, border: `1px solid ${SAGE}` }} placeholder="名稱" />
+      <div style={{ display: "flex", gap: 8 }}>
+        <input type="number" value={editForm.amount || ""} onChange={e => setEditForm(p => ({ ...p, amount: parseInt(e.target.value) }))}
+          style={{ ...inputStyle, flex: 1, border: `1px solid ${SAGE}` }} placeholder="金額" />
+        <button onClick={() => saveEdit(type)} style={{ background: SAGE, color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>儲存</button>
+        <button onClick={() => { setEditId(null); setEditForm({}); }} style={{ background: "#eee", color: "#666", border: "none", borderRadius: 8, padding: "8px 12px", cursor: "pointer", fontSize: 14 }}>取消</button>
+      </div>
+    </div>
+  );
+
+  const tabIcons = {
+    expense: <ArrowDownCircle size={14} />,
+    income: <ArrowUpCircle size={14} />,
+    onetime: <CalendarMinus size={14} />,
+    onetimeincome: <CalendarPlus size={14} />,
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", background: "#e8e5df", borderRadius: 14, padding: 4, gap: 4 }}>
+        {[
+          { key: "expense", label: "月支出" },
+          { key: "income", label: "月收入" },
+          { key: "onetime", label: "特定支出" },
+          { key: "onetimeincome", label: "特定收入" },
+        ].map(t => (
+          <Tab key={t.key} label={t.label} active={activeTab === t.key} onClick={() => { setActiveTab(t.key); setShowAdd(false); }} />
+        ))}
+      </div>
+
+      <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 20, padding: "20px 22px", color: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, opacity: 0.75 }}>
+          <span style={{ color: "#fff" }}>{tabIcons[activeTab]}</span>
+          <span style={{ fontSize: 12, fontFamily: "'Noto Sans TC', sans-serif" }}>
+            {activeTab === "expense" ? "本月固定支出" : activeTab === "income" ? "本月預期收入" : activeTab === "onetime" ? "特定月份支出" : "特定月份收入"}
+          </span>
+        </div>
+        <div style={{ fontSize: 32, fontWeight: 800, fontFamily: "'Noto Sans TC', sans-serif" }}>
+          {formatNT(activeTab === "expense" ? totalExpense : activeTab === "income" ? totalIncome : activeTab === "onetime" ? totalOneTime : totalOneTimeIncome)}
+        </div>
+      </div>
+
+      <Card style={{ padding: "14px 16px" }}>
+        {activeTab === "expense" && expenses.map(item => (
+          <div key={item.id} style={{ borderBottom: "1px solid #f0ede8" }}>
+            {editId === item.id + "_expense" ? <EditRow item={item} type="expense" /> : (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 12, background: item.color + "22", display: "flex", alignItems: "center", justifyContent: "center", color: item.color, flexShrink: 0 }}>
+                    <ArrowDownCircle size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.name}</div>
+                    <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.category}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span onClick={() => startEdit(item, "expense")} style={{ fontSize: 15, fontWeight: 700, color: RED, fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>-{formatNT(item.amount)}</span>
+                  <button onClick={() => removeExpense(item.id)} style={{ border: "none", background: "#fde8e5", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {activeTab === "income" && income.map(item => (
+          <div key={item.id} style={{ borderBottom: "1px solid #f0ede8" }}>
+            {editId === item.id + "_income" ? <EditRow item={item} type="income" /> : (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 12, background: "#e8f0e5", display: "flex", alignItems: "center", justifyContent: "center", color: SAGE, flexShrink: 0 }}>
+                    <ArrowUpCircle size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.name}</div>
+                    <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>每月 {item.date} 日入帳</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span onClick={() => startEdit(item, "income")} style={{ fontSize: 15, fontWeight: 700, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>+{formatNT(item.amount)}</span>
+                  <button onClick={() => removeIncome(item.id)} style={{ border: "none", background: "#fde8e5", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {(activeTab === "onetime" || activeTab === "onetimeincome") && (
+          <>
+            {(activeTab === "onetime" ? oneTime : oneTimeIncome).length === 0 && (
+              <div style={{ textAlign: "center", padding: "20px 0", color: "#bbb" }}>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+                  {activeTab === "onetime" ? <CalendarMinus size={36} color="#ddd" /> : <CalendarPlus size={36} color="#ddd" />}
+                </div>
+                <div style={{ fontSize: 13, fontFamily: "'Noto Sans TC', sans-serif" }}>
+                  {activeTab === "onetime" ? "尚無特定支出，例如保險年繳、汽車稅" : "尚無特定收入，例如年終、分紅"}
+                </div>
+              </div>
+            )}
+            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+              const items = (activeTab === "onetime" ? oneTime : oneTimeIncome).filter(o => o.month === m);
+              if (items.length === 0) return null;
+              const isIncome = activeTab === "onetimeincome";
+              return (
+                <div key={m}>
+                  <div style={{ fontSize: 12, color: isIncome ? SAGE : RED, fontWeight: 700, padding: "8px 0 4px", fontFamily: "'Noto Sans TC', sans-serif" }}>{MONTHS[m-1]}</div>
+                  {items.map(item => (
+                    <div key={item.id} style={{ borderBottom: "1px solid #f0ede8" }}>
+                      {editId === item.id + "_" + activeTab ? <EditRow item={item} type={activeTab} /> : (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div style={{ width: 38, height: 38, borderRadius: 12, background: isIncome ? "#e8f0e5" : "#fde8e5", display: "flex", alignItems: "center", justifyContent: "center", color: isIncome ? SAGE : RED, flexShrink: 0 }}>
+                              {isIncome ? <CalendarPlus size={18} /> : <CalendarMinus size={18} />}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.name}</div>
+                              <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>{m}月{item.day}日 · {repeatLabel(item)}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span onClick={() => startEdit(item, activeTab)} style={{ fontSize: 15, fontWeight: 700, color: isIncome ? SAGE : RED, fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>
+                              {isIncome ? "+" : "-"}{formatNT(item.amount)}
+                            </span>
+                            <button onClick={() => isIncome ? removeOneTimeIncome(item.id) : removeOneTime(item.id)} style={{ border: "none", background: "#fde8e5", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        <button onClick={handleShowAdd} style={{ width: "100%", marginTop: 12, padding: "12px", border: `2px dashed ${SAGE}44`, borderRadius: 14, background: "none", cursor: "pointer", color: SAGE, fontSize: 14, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif" }}>
+          + 新增{activeTab === "expense" ? "支出" : activeTab === "income" ? "收入" : activeTab === "onetime" ? "特定支出" : "特定收入"}項目
+        </button>
+
+        {showAdd && (
+          <div ref={addRef} style={{ marginTop: 12, padding: 14, background: BG, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            <input type="text" placeholder="項目名稱" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} style={{ ...inputStyle }} />
+            <input type="number" placeholder="金額 (NT$)" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} style={{ ...inputStyle }} />
+            {activeTab === "expense" && (
+              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} style={{ ...inputStyle }}>
+                {categories.map(c => <option key={c}>{c}</option>)}
+              </select>
+            )}
+            {activeTab === "income" && (
+              <input type="number" placeholder="入帳日 (幾號)" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} style={{ ...inputStyle }} />
+            )}
+            {(activeTab === "onetime" || activeTab === "onetimeincome") && (
+              <>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <select value={form.month} onChange={e => setForm(p => ({ ...p, month: e.target.value }))} style={{ ...inputStyle, flex: 1 }}>
+                    {MONTHS.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
+                  </select>
+                  <input type="number" min={1} max={31} placeholder="幾號" value={form.day} onChange={e => setForm(p => ({ ...p, day: e.target.value }))} style={{ ...inputStyle, width: 70 }} />
+                </div>
+                <select value={form.repeat} onChange={e => setForm(p => ({ ...p, repeat: e.target.value }))} style={{ ...inputStyle }}>
+                  <option value="loop">每年循環</option>
+                  <option value="once">一次性（用完消失）</option>
+                  <option value="fixed">固定期數（幾個月）</option>
+                </select>
+                {form.repeat === "once" && (
+                  <select value={form.year} onChange={e => setForm(p => ({ ...p, year: parseInt(e.target.value) }))} style={{ ...inputStyle }}>
+                    {[currentYear, currentYear+1, currentYear+2].map(y => <option key={y} value={y}>{y}年</option>)}
+                  </select>
+                )}
+                {form.repeat === "fixed" && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <select value={form.year} onChange={e => setForm(p => ({ ...p, year: parseInt(e.target.value) }))} style={{ ...inputStyle, flex: 1 }}>
+                      {[currentYear, currentYear+1, currentYear+2].map(y => <option key={y} value={y}>{y}年開始</option>)}
+                    </select>
+                    <input type="number" min={1} placeholder="共幾個月" value={form.times} onChange={e => setForm(p => ({ ...p, times: e.target.value }))} style={{ ...inputStyle, width: 90 }} />
+                  </div>
+                )}
+              </>
+            )}
+            <button onClick={addItem} style={{ background: SAGE, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+function GoalCard({ startAssets, netMonthly }) {
+  const [goal, setGoal] = useState(() => loadData("savingsGoal", 500000));
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => { saveData("savingsGoal", goal); }, [goal]);
+
+  const pct = Math.min(100, Math.round((startAssets / goal) * 100));
+  const diff = Math.max(0, goal - startAssets);
+  const monthsLeft = netMonthly > 0 ? Math.ceil(diff / netMonthly) : null;
+  const reachDate = monthsLeft ? (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + monthsLeft);
+    return d.getFullYear() + "/" + (d.getMonth()+1);
+  })() : null;
+
+  return (
+    <Card>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+        <TrendingUp size={16} color={SAGE} />
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>儲蓄目標</span>
+      </div>
+      {editing ? (
+        <input type="number" autoFocus defaultValue={goal}
+          onBlur={e => { setGoal(parseInt(e.target.value) || goal); setEditing(false); }}
+          style={{ fontSize: 24, fontWeight: 800, color: SAGE, border: "none", borderBottom: "2px solid " + SAGE, outline: "none", background: "transparent", width: "100%", fontFamily: "'Noto Sans TC', sans-serif", marginBottom: 12 }} />
+      ) : (
+        <div onClick={() => setEditing(true)} style={{ fontSize: 24, fontWeight: 800, color: SAGE, marginBottom: 12, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>
+          {formatNT(goal)}
+        </div>
+      )}
+      <ProgressBar value={startAssets} max={goal} color={SAGE} />
+      <div style={{ fontSize: 11, color: "#aaa", marginTop: 4, marginBottom: 12, fontFamily: "'Noto Sans TC', sans-serif" }}>{pct}%</div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1, background: "#fde8e5", borderRadius: 12, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, color: "#aaa", marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>還差</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: RED, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(diff)}</div>
+        </div>
+        <div style={{ flex: 1, background: "#e8f0e5", borderRadius: 12, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, color: "#aaa", marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>預計達標</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif" }}>{reachDate || "—"}</div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }) {
+  const totalTWD = calcTotal(assets);
+  const [payday, setPayday] = useState(() => loadData("payday", 25));
+  const [startAssets, setStartAssets] = useState(Math.round(totalTWD));
+
+  useEffect(() => { saveData("payday", payday); }, [payday]);
+
+  const foodMonthly = calcFoodMonthly(food);
+  const totalExpense = expenses.reduce((s, e) => s + e.amount, 0) + foodMonthly;
+  const totalIncome  = income.reduce((s, i) => s + i.amount, 0);
+  const netMonthly   = totalIncome - totalExpense;
+
+  const today = new Date();
+  const startYear  = today.getFullYear();
+  const startMonth = today.getMonth();
+
+  const forecast = useMemo(() => {
+    let runningAssets = startAssets;
+    return Array.from({ length: 12 }, (_, i) => {
+      const calMonth = ((startMonth + i) % 12) + 1;
+      const year     = startYear + Math.floor((startMonth + i) / 12);
+      const monthIndex = calMonth - 1;
+      runningAssets += netMonthly;
+      const oneTimeItems       = oneTime.filter(o => shouldAppear(o, calMonth, year));
+      const oneTimeDeduct      = oneTimeItems.reduce((s, o) => s + o.amount, 0);
+      const oneTimeIncomeItems = oneTimeIncome.filter(o => shouldAppear(o, calMonth, year));
+      const oneTimeIncomeAdd   = oneTimeIncomeItems.reduce((s, o) => s + o.amount, 0);
+      runningAssets -= oneTimeDeduct;
+      runningAssets += oneTimeIncomeAdd;
+      return {
+        month: MONTHS[monthIndex], calMonth, year,
+        assets: Math.max(0, runningAssets),
+        paydayDate: `${year}/${calMonth}/${payday}`,
+        net: netMonthly, oneTimeDeduct, oneTimeItems,
+        oneTimeIncomeItems, oneTimeIncomeAdd,
+      };
+    });
+  }, [startAssets, netMonthly, payday, startMonth, startYear, oneTime, oneTimeIncome]);
+
+  const maxAssets = Math.max(...forecast.map(f => f.assets), 1);
+  const inputStyle = { padding: "6px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, color: "#333", background: "#fff", fontFamily: "'Noto Sans TC', sans-serif", outline: "none" };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <Card>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#333", marginBottom: 12, fontFamily: "'Noto Sans TC', sans-serif" }}>預測設定</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: "#666", fontFamily: "'Noto Sans TC', sans-serif" }}>起始總資產</span>
+            <input type="number" value={startAssets} onChange={e => setStartAssets(parseInt(e.target.value) || 0)}
+              style={{ ...inputStyle, width: 130, textAlign: "right" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: "#666", fontFamily: "'Noto Sans TC', sans-serif" }}>發薪日（每月幾號）</span>
+            <input type="number" min={1} max={31} value={payday} onChange={e => setPayday(parseInt(e.target.value) || 25)}
+              style={{ ...inputStyle, width: 80, textAlign: "center" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: netMonthly >= 0 ? "#e8f0e5" : "#fde8e5", borderRadius: 12 }}>
+            <span style={{ fontSize: 13, color: "#666", fontFamily: "'Noto Sans TC', sans-serif" }}>每月淨增減（含伙食）</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: netMonthly >= 0 ? SAGE : RED, fontFamily: "'Noto Sans TC', sans-serif" }}>
+              {netMonthly >= 0 ? "+" : ""}{formatNT(netMonthly)}
+            </span>
+          </div>
+        </div>
+      </Card>
+
+      <GoalCard startAssets={startAssets} netMonthly={netMonthly} />
+      <Card style={{ padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+          <ChevronRight size={16} color={SAGE} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>逐月預估（發薪後）</span>
+        </div>
+        {forecast.map((f, i) => (
+          <div key={i} style={{ padding: "12px 0", borderBottom: i < 11 ? "1px solid #f0ede8" : "none" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: i === 0 ? SAGE : `${SAGE}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : SAGE, fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>{f.month}</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{f.paydayDate}</div>
+                  <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>{f.net >= 0 ? "+" : ""}{formatNT(f.net)} / 月</div>
+                </div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: f.assets > startAssets ? SAGE : RED, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(f.assets)}</div>
+                <div style={{ fontSize: 10, color: "#bbb", fontFamily: "'Noto Sans TC', sans-serif" }}>預估總資產</div>
+              </div>
+            </div>
+            <OneTimeList items={f.oneTimeItems} color={RED} icon={null} />
+            <OneTimeList items={f.oneTimeIncomeItems} color={SAGE} icon={null} />
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+export default function App() {
+  const [pageIndex, setPageIndex] = useState(0);
+  const [assets, setAssets]               = useState(() => loadData("assets", DEFAULT_ASSETS));
+  const [expenses, setExpenses]           = useState(() => loadData("expenses", DEFAULT_EXPENSES));
+  const [income, setIncome]               = useState(() => loadData("income", DEFAULT_INCOME));
+  const [oneTime, setOneTime]             = useState(() => loadData("onetime", DEFAULT_ONETIME));
+  const [oneTimeIncome, setOneTimeIncome] = useState(() => loadData("onetimeincome", DEFAULT_ONETIME_INCOME));
+  const [snapshots, setSnapshots]         = useState(() => loadData("snapshots", DEFAULT_SNAPSHOTS));
+  const [food, setFood]                   = useState(() => loadData("food", DEFAULT_FOOD));
+
+  useEffect(() => { saveData("assets", assets); }, [assets]);
+  useEffect(() => { saveData("expenses", expenses); }, [expenses]);
+  useEffect(() => { saveData("income", income); }, [income]);
+  useEffect(() => { saveData("onetime", oneTime); }, [oneTime]);
+  useEffect(() => { saveData("onetimeincome", oneTimeIncome); }, [oneTimeIncome]);
+  useEffect(() => { saveData("snapshots", snapshots); }, [snapshots]);
+  useEffect(() => { saveData("food", food); }, [food]);
+
+  const handleSaveSnapshot = () => {
+    const total = calcTotal(assets);
+    setSnapshots(prev => [...prev, { ts: Date.now(), date: todayStr(), total }]);
+  };
+
+  const navItems = [
+    { icon: <Home size={22} />, label: "概覽" },
+    { icon: <Wallet size={22} />, label: "資產" },
+    { icon: <UtensilsCrossed size={22} />, label: "伙食" },
+    { icon: <ReceiptText size={22} />, label: "帳務" },
+    { icon: <TrendingUp size={22} />, label: "預測" },
+  ];
+
+  const pageGreetings = [
+    "掌握今日資產狀況，規劃美好未來。",
+    "分類管理你的所有資產。",
+    "設定每日三餐平均花費。",
+    "管理每月固定收支與特定支出。",
+    "預覽每個發薪日的資產預估。",
+  ];
+
+  const pages = [
+    <OverviewPage expenses={expenses} income={income} assets={assets} snapshots={snapshots} onSaveSnapshot={handleSaveSnapshot} oneTimeIncome={oneTimeIncome} oneTime={oneTime} food={food} />,
+    <AssetsPage assets={assets} setAssets={setAssets} />,
+    <FoodPage food={food} setFood={setFood} />,
+    <ExpensePage expenses={expenses} setExpenses={setExpenses} income={income} setIncome={setIncome} oneTime={oneTime} setOneTime={setOneTime} oneTimeIncome={oneTimeIncome} setOneTimeIncome={setOneTimeIncome} />,
+    <ForecastPage expenses={expenses} income={income} assets={assets} oneTime={oneTime} oneTimeIncome={oneTimeIncome} food={food} />,
+  ];
+
+  return (
+    <div style={{ width: "100%", boxSizing: "border-box", height: "100vh", background: BG, display: "flex", flexDirection: "column", fontFamily: "'Noto Sans TC', sans-serif", overflowX: "hidden" }}>
+      <div style={{ padding: "52px 20px 8px", flexShrink: 0 }}>
+        <div style={{ fontSize: 13, color: "#888", marginBottom: 2 }}>
+          {new Date().toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}
+        </div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#333", lineHeight: 1.5 }}>{pageGreetings[pageIndex]}</div>
+      </div>
+
+      <SwipeContainer pageIndex={pageIndex} setPageIndex={setPageIndex}>
+        {pages.map((page, i) => (
+          <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 100px", flexShrink: 0 }}>
+            {page}
+          </div>
+        ))}
+      </SwipeContainer>
+
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", borderTop: "1px solid #e8e5df", display: "flex", padding: "6px 0 20px", flexShrink: 0 }}>
+        {navItems.map((item, i) => (
+          <NavItem key={i} icon={item.icon} label={item.label} active={pageIndex === i} onClick={() => setPageIndex(i)} />
+        ))}
+      </div>
+    </div>
+  );
+}
