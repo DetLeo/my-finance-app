@@ -3,7 +3,8 @@ import {
   Home, Wallet, UtensilsCrossed, ReceiptText, TrendingUp,
   Landmark, BarChart2, DollarSign, ArrowLeftRight,
   ArrowDownCircle, ArrowUpCircle, CalendarMinus, CalendarPlus,
-  Camera, ClipboardList, Save, PiggyBank, ChevronRight, Sun, Palmtree
+  Camera, ClipboardList, Save, PiggyBank, ChevronRight,
+  Sun, Palmtree, HardDrive, Upload, Download
 } from "lucide-react";
 
 const SAGE = "#5C6E52";
@@ -140,26 +141,30 @@ function NavItem({ icon, label, active, onClick }) {
   );
 }
 
-function OneTimeList({ items, color, icon }) {
+function CombinedOneTimeList({ expenseItems, incomeItems }) {
   const [expanded, setExpanded] = useState(false);
-  if (!items || items.length === 0) return null;
+  const hasAny = (expenseItems && expenseItems.length > 0) || (incomeItems && incomeItems.length > 0);
+  if (!hasAny) return null;
   return (
     <div style={{ marginTop: 6, display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
       {!expanded ? (
         <div onClick={() => setExpanded(true)}
-          style={{ background: color === RED ? "#fde8e5" : "#e8f0e5", borderRadius: 8, padding: "3px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ color, display: "flex" }}>{icon}</span>
-          <span style={{ fontSize: 11, color, fontWeight: 700, fontFamily: "'Noto Sans TC', sans-serif" }}>
-            {items.length}項 ···
-          </span>
+          style={{ background: "#e8e5df", borderRadius: 8, padding: "3px 10px", cursor: "pointer" }}>
+          <span style={{ fontSize: 11, color: "#888", fontWeight: 700 }}>···</span>
         </div>
       ) : (
         <>
-          {items.map(o => (
-            <div key={o.id} style={{ background: color === RED ? "#fde8e5" : "#e8f0e5", borderRadius: 8, padding: "3px 10px", display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ color, display: "flex" }}>{icon}</span>
-              <span style={{ fontSize: 11, color, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif", whiteSpace: "nowrap" }}>
-                {truncate(o.name)} {color === RED ? "-" : "+"}{formatNT(o.amount)}
+          {(expenseItems || []).map(o => (
+            <div key={o.id} style={{ background: "#fde8e5", borderRadius: 8, padding: "3px 10px" }}>
+              <span style={{ fontSize: 11, color: RED, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif", whiteSpace: "nowrap" }}>
+                📅 {truncate(o.name)} -{formatNT(o.amount)}
+              </span>
+            </div>
+          ))}
+          {(incomeItems || []).map(o => (
+            <div key={o.id} style={{ background: "#e8f0e5", borderRadius: 8, padding: "3px 10px" }}>
+              <span style={{ fontSize: 11, color: SAGE, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif", whiteSpace: "nowrap" }}>
+                🎉 {truncate(o.name)} +{formatNT(o.amount)}
               </span>
             </div>
           ))}
@@ -173,13 +178,20 @@ function OneTimeList({ items, color, icon }) {
   );
 }
 
+function OneTimeList({ items, color, icon }) { return null; }
+
 function SwipeContainer({ pageIndex, setPageIndex, children }) {
   const containerRef = useRef(null);
+  const wrapperRef = useRef(null);
   const startXRef = useRef(null);
   const startYRef = useRef(null);
   const currentXRef = useRef(0);
   const isDraggingRef = useRef(false);
   const isHorizontalRef = useRef(null);
+  const pageIndexRef = useRef(pageIndex);
+
+  useEffect(() => { pageIndexRef.current = pageIndex; }, [pageIndex]);
+
   const WIDTH = typeof window !== "undefined" ? window.innerWidth : 390;
   const THRESHOLD = WIDTH * 0.4;
   const SPRING = "cubic-bezier(0.25, 0.46, 0.45, 0.94)";
@@ -190,56 +202,76 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
     containerRef.current.style.transform = `translateX(${x}px)`;
   };
 
-  const onTouchStart = (e) => {
-    startXRef.current = e.touches[0].clientX;
-    startYRef.current = e.touches[0].clientY;
-    isDraggingRef.current = true;
-    isHorizontalRef.current = null;
-    setTranslate(-pageIndex * WIDTH, false);
-  };
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
 
-  const onTouchMove = (e) => {
-    if (!isDraggingRef.current) return;
-    const dx = e.touches[0].clientX - startXRef.current;
-    const dy = e.touches[0].clientY - startYRef.current;
-    if (isHorizontalRef.current === null) {
-      isHorizontalRef.current = Math.abs(dx) > Math.abs(dy);
-    }
-    if (!isHorizontalRef.current) return;
-    e.preventDefault();
-    const base = -pageIndex * WIDTH;
-    let x = base + dx;
-    if (pageIndex === 0 && dx > 0) x = base + dx * 0.2;
-    if (pageIndex === PAGES.length - 1 && dx < 0) x = base + dx * 0.2;
-    currentXRef.current = dx;
-    setTranslate(x, false);
-  };
+    const handleTouchStart = (e) => {
+      startXRef.current = e.touches[0].clientX;
+      startYRef.current = e.touches[0].clientY;
+      isDraggingRef.current = true;
+      isHorizontalRef.current = null;
+      currentXRef.current = 0;
+      const idx = pageIndexRef.current;
+      setTranslate(-idx * WIDTH, false);
+    };
 
-  const onTouchEnd = () => {
-    if (!isDraggingRef.current || !isHorizontalRef.current) {
+    const handleTouchMove = (e) => {
+      if (!isDraggingRef.current) return;
+      const dx = e.touches[0].clientX - startXRef.current;
+      const dy = e.touches[0].clientY - startYRef.current;
+
+      if (isHorizontalRef.current === null) {
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+          isHorizontalRef.current = Math.abs(dx) > Math.abs(dy);
+        } else return;
+      }
+
+      if (isHorizontalRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = pageIndexRef.current;
+        const base = -idx * WIDTH;
+        let x = base + dx;
+        if (idx === 0 && dx > 0) x = base + dx * 0.15;
+        if (idx === PAGES.length - 1 && dx < 0) x = base + dx * 0.15;
+        currentXRef.current = dx;
+        setTranslate(x, false);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
-      return;
-    }
-    isDraggingRef.current = false;
-    const dx = currentXRef.current;
-    let newIndex = pageIndex;
-    if (dx < -THRESHOLD && pageIndex < PAGES.length - 1) newIndex = pageIndex + 1;
-    else if (dx > THRESHOLD && pageIndex > 0) newIndex = pageIndex - 1;
-    setPageIndex(newIndex);
-    setTranslate(-newIndex * WIDTH, true);
-  };
+      if (!isHorizontalRef.current) return;
+      const dx = currentXRef.current;
+      const idx = pageIndexRef.current;
+      let newIndex = idx;
+      if (dx < -THRESHOLD && idx < PAGES.length - 1) newIndex = idx + 1;
+      else if (dx > THRESHOLD && idx > 0) newIndex = idx - 1;
+      setPageIndex(newIndex);
+      setTranslate(-newIndex * WIDTH, true);
+    };
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    el.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove', handleTouchMove);
+      el.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
 
   useEffect(() => {
     setTranslate(-pageIndex * WIDTH, true);
   }, [pageIndex]);
 
   return (
-    <div style={{ overflow: "hidden", flex: 1, position: "relative" }}>
+    <div ref={wrapperRef} style={{ overflow: "hidden", flex: 1, position: "relative" }}>
       <div
         ref={containerRef}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
         style={{
           display: "flex",
           width: `${PAGES.length * 100}%`,
@@ -452,7 +484,7 @@ function AssetsPage({ assets, setAssets }) {
     setEditId(null); setEditVal(""); setEditName(""); setEditShares(""); setEditPrice("");
   };
 
-  const inputStyle = { padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none" };
+  const inputStyle = { padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 16, fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none" };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -565,7 +597,7 @@ function AssetsPage({ assets, setAssets }) {
           );
         })}
 
-        <button onClick={handleShowAdd} style={{ width: "100%", marginTop: 12, padding: "12px", border: `2px dashed ${activeInfo.color}44`, borderRadius: 14, background: "none", cursor: "pointer", color: activeInfo.color, fontSize: 14, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        <button onClick={handleShowAdd} style={{ width: "100%", marginTop: 12, padding: "12px", border: `2px dashed ${activeInfo.color}44`, borderRadius: 14, background: "none", cursor: "pointer", color: activeInfo.color, fontSize: 14, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif" }}>
           + 新增{activeInfo.label}
         </button>
 
@@ -594,7 +626,7 @@ function AssetsPage({ assets, setAssets }) {
             )}
             <input type="text" placeholder="備註（選填）" value={form.note} onChange={e => setForm(p => ({ ...p, note: e.target.value }))}
               style={{ ...inputStyle, padding: "10px 14px", border: "1px solid #ddd", width: "100%", boxSizing: "border-box" }} />
-            <button onClick={addItem} style={{ background: activeInfo.color, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
+            <button onClick={addItem} style={{ background: activeInfo.color, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
           </div>
         )}
       </Card>
@@ -619,7 +651,7 @@ function FoodPage({ food, setFood }) {
 
   const inputStyle = {
     padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd",
-    fontSize: 15, fontFamily: "'Noto Sans TC', sans-serif",
+    fontSize: 16, fontFamily: "'Noto Sans TC', sans-serif",
     color: "#333", background: "#fff", outline: "none",
     width: 90, textAlign: "right", boxSizing: "border-box"
   };
@@ -737,7 +769,7 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
   const totalOneTime = oneTime.reduce((s, o) => s + o.amount, 0);
   const totalOneTimeIncome = oneTimeIncome.reduce((s, o) => s + o.amount, 0);
 
-  const inputStyle = { padding: "10px 14px", borderRadius: 10, border: "1px solid #ddd", fontSize: 14, fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none" };
+  const inputStyle = { padding: "10px 14px", borderRadius: 10, border: "1px solid #ddd", fontSize: 16, fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none" };
 
   const EditRow = ({ item, type }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 0" }}>
@@ -751,13 +783,6 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
       </div>
     </div>
   );
-
-  const tabIcons = {
-    expense: <ArrowDownCircle size={14} />,
-    income: <ArrowUpCircle size={14} />,
-    onetime: <CalendarMinus size={14} />,
-    onetimeincome: <CalendarPlus size={14} />,
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -774,7 +799,9 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
 
       <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 20, padding: "20px 22px", color: "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, opacity: 0.75 }}>
-          <span style={{ color: "#fff" }}>{tabIcons[activeTab]}</span>
+          <span style={{ color: "#fff" }}>
+            {activeTab === "expense" ? <ArrowDownCircle size={14} /> : activeTab === "income" ? <ArrowUpCircle size={14} /> : activeTab === "onetime" ? <CalendarMinus size={14} /> : <CalendarPlus size={14} />}
+          </span>
           <span style={{ fontSize: 12, fontFamily: "'Noto Sans TC', sans-serif" }}>
             {activeTab === "expense" ? "本月固定支出" : activeTab === "income" ? "本月預期收入" : activeTab === "onetime" ? "特定月份支出" : "特定月份收入"}
           </span>
@@ -921,7 +948,7 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
                 )}
               </>
             )}
-            <button onClick={addItem} style={{ background: SAGE, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
+            <button onClick={addItem} style={{ background: SAGE, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
           </div>
         )}
       </Card>
@@ -1013,8 +1040,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }
     });
   }, [startAssets, netMonthly, payday, startMonth, startYear, oneTime, oneTimeIncome]);
 
-  const maxAssets = Math.max(...forecast.map(f => f.assets), 1);
-  const inputStyle = { padding: "6px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, color: "#333", background: "#fff", fontFamily: "'Noto Sans TC', sans-serif", outline: "none" };
+  const inputStyle = { padding: "6px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 16, color: "#333", background: "#fff", fontFamily: "'Noto Sans TC', sans-serif", outline: "none" };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1041,6 +1067,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }
       </Card>
 
       <GoalCard startAssets={startAssets} netMonthly={netMonthly} />
+
       <Card style={{ padding: "14px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
           <ChevronRight size={16} color={SAGE} />
@@ -1061,8 +1088,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }
                 <div style={{ fontSize: 10, color: "#bbb", fontFamily: "'Noto Sans TC', sans-serif" }}>預估總資產</div>
               </div>
             </div>
-            <OneTimeList items={f.oneTimeItems} color={RED} icon={null} />
-            <OneTimeList items={f.oneTimeIncomeItems} color={SAGE} icon={null} />
+            <CombinedOneTimeList expenseItems={f.oneTimeItems} incomeItems={f.oneTimeIncomeItems} />
           </div>
         ))}
       </Card>
@@ -1072,6 +1098,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }
 
 export default function App() {
   const [pageIndex, setPageIndex] = useState(0);
+  const [showBackup, setShowBackup] = useState(false);
   const [assets, setAssets]               = useState(() => loadData("assets", DEFAULT_ASSETS));
   const [expenses, setExpenses]           = useState(() => loadData("expenses", DEFAULT_EXPENSES));
   const [income, setIncome]               = useState(() => loadData("income", DEFAULT_INCOME));
@@ -1091,6 +1118,49 @@ export default function App() {
   const handleSaveSnapshot = () => {
     const total = calcTotal(assets);
     setSnapshots(prev => [...prev, { ts: Date.now(), date: todayStr(), total }]);
+  };
+
+  const handleExport = () => {
+    const data = {
+      assets: loadData("assets", DEFAULT_ASSETS),
+      expenses: loadData("expenses", DEFAULT_EXPENSES),
+      income: loadData("income", DEFAULT_INCOME),
+      oneTime: loadData("onetime", DEFAULT_ONETIME),
+      oneTimeIncome: loadData("onetimeincome", DEFAULT_ONETIME_INCOME),
+      snapshots: loadData("snapshots", DEFAULT_SNAPSHOTS),
+      food: loadData("food", DEFAULT_FOOD),
+      payday: loadData("payday", 25),
+      savingsGoal: loadData("savingsGoal", 500000),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "finance-backup-" + todayStr().replace(/\//g, "-") + ".json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data.assets) { saveData("assets", data.assets); setAssets(data.assets); }
+        if (data.expenses) { saveData("expenses", data.expenses); setExpenses(data.expenses); }
+        if (data.income) { saveData("income", data.income); setIncome(data.income); }
+        if (data.oneTime) { saveData("onetime", data.oneTime); setOneTime(data.oneTime); }
+        if (data.oneTimeIncome) { saveData("onetimeincome", data.oneTimeIncome); setOneTimeIncome(data.oneTimeIncome); }
+        if (data.snapshots) { saveData("snapshots", data.snapshots); setSnapshots(data.snapshots); }
+        if (data.food) { saveData("food", data.food); setFood(data.food); }
+        if (data.payday) saveData("payday", data.payday);
+        if (data.savingsGoal) saveData("savingsGoal", data.savingsGoal);
+        alert("匯入成功！");
+      } catch { alert("檔案格式錯誤"); }
+    };
+    reader.readAsText(file);
   };
 
   const navItems = [
@@ -1119,16 +1189,34 @@ export default function App() {
 
   return (
     <div style={{ width: "100%", boxSizing: "border-box", height: "100vh", background: BG, display: "flex", flexDirection: "column", fontFamily: "'Noto Sans TC', sans-serif", overflowX: "hidden" }}>
-      <div style={{ padding: "52px 20px 8px", flexShrink: 0 }}>
+      <div style={{ padding: "52px 20px 8px", flexShrink: 0, position: "relative" }}>
         <div style={{ fontSize: 13, color: "#888", marginBottom: 2 }}>
           {new Date().toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}
         </div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "#333", lineHeight: 1.5 }}>{pageGreetings[pageIndex]}</div>
+        <button onClick={() => setShowBackup(p => !p)} style={{ position: "absolute", top: 52, right: 20, border: "none", background: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: 0 }}>
+          <HardDrive size={20} color={SAGE} />
+          <span style={{ fontSize: 9, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 600 }}>備份/還原</span>
+        </button>
+        {showBackup && (
+          <div style={{ position: "absolute", top: 90, right: 20, background: "#fff", borderRadius: 14, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", padding: "8px 0", zIndex: 100, minWidth: 150 }}>
+            <button onClick={() => { handleExport(); setShowBackup(false); }} style={{ width: "100%", padding: "12px 16px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>
+              <Upload size={16} color={SAGE} />
+              匯出備份
+            </button>
+            <div style={{ height: 1, background: "#f0ede8", margin: "0 12px" }} />
+            <label style={{ width: "100%", padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "#333", fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>
+              <Download size={16} color={SAGE} />
+              匯入還原
+              <input type="file" accept=".json" style={{ display: "none" }} onChange={e => { handleImport(e); setShowBackup(false); }} />
+            </label>
+          </div>
+        )}
       </div>
 
       <SwipeContainer pageIndex={pageIndex} setPageIndex={setPageIndex}>
         {pages.map((page, i) => (
-          <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 100px", flexShrink: 0 }}>
+          <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 120px", flexShrink: 0 }}>
             {page}
           </div>
         ))}
