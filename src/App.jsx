@@ -774,11 +774,11 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
       const isFixed = form.repeat === "fixed";
       const record = {
         ...base,
-        month: isFixed ? currentMonth : parseInt(form.month),
+        month: parseInt(form.month),
         day: parseInt(form.day) || 1,
         repeat: form.repeat,
         times: parseInt(form.times) || 3,
-        year: isFixed ? currentYear : parseInt(form.year),
+        year: parseInt(form.year),
         ...(isFixed && form.firstAmount ? { firstAmount: parseInt(form.firstAmount) } : {})
       };
       if (activeTab === "onetime") setOneTime(prev => [...prev, record]);
@@ -876,8 +876,18 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
                 {form.repeat === "fixed" ? (
                   <>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>{currentYear}年{currentMonth}月起，共</span>
-                      <input type="number" min={1} placeholder="幾個月" value={form.times} onChange={e => setForm(p => ({ ...p, times: e.target.value }))} style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+                      <select value={form.year + "-" + form.month}
+                        onChange={e => { const [y, m] = e.target.value.split("-"); setForm(p => ({ ...p, year: parseInt(y), month: parseInt(m) })); }}
+                        style={{ ...inputStyle, flex: 1, minWidth: 0 }}>
+                        {Array.from({ length: 19 }, (_, i) => {
+                          const t = (currentMonth - 1) - 6 + i;
+                          const y = currentYear + Math.floor(t / 12);
+                          const m = ((t % 12) + 12) % 12 + 1;
+                          return <option key={y + "-" + m} value={y + "-" + m}>{y}年{m}月起</option>;
+                        })}
+                      </select>
+                      <span style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>共</span>
+                      <input type="number" min={1} placeholder="期數" value={form.times} onChange={e => setForm(p => ({ ...p, times: e.target.value }))} style={{ ...inputStyle, width: 70 }} />
                       <span style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>個月</span>
                     </div>
                     <input type="number" placeholder="首期金額（與每期不同時才填）" value={form.firstAmount} onChange={e => setForm(p => ({ ...p, firstAmount: e.target.value }))} style={{ ...inputStyle }} />
