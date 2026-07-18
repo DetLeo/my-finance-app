@@ -1112,7 +1112,9 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food, 
       const monthIndex = calMonth - 1;
 
       if (i === 0) {
-        runningAssets += (netMonthly / 30) * daysToFirst;
+        const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        runningAssets -= (totalExpense / daysInMonth) * daysToFirst;
+        runningAssets += totalIncome;
       } else {
         runningAssets += netMonthly;
       }
