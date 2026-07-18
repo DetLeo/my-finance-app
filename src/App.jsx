@@ -298,9 +298,12 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
           s + toTWD(item.amount, t.key === "foreign" ? item.currency : "TWD", rates), 0)
   ]));
 
-  const lastSnap = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+  const todayDate = todayStr();
+  const prevSnaps = snapshots.filter(s => s.date !== todayDate);
+  const lastSnap = prevSnaps.length > 0 ? prevSnaps[prevSnaps.length - 1] : null;
+  const onlyToday = !lastSnap && snapshots.length > 0;
   const diff = lastSnap ? totalTWD - lastSnap.total : null;
-  const daysSince = lastSnap ? Math.round((Date.now() - lastSnap.ts) / 86400000) : null;
+  const daysSince = lastSnap ? Math.max(1, Math.round((Date.now() - lastSnap.ts) / 86400000)) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -363,7 +366,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
         ) : (
           <div style={{ textAlign: "center", padding: "16px 0", color: "var(--faint)" }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}><ClipboardList size={36} color="var(--faint)" /></div>
-            <div style={{ fontSize: 13, fontFamily: "'Noto Sans TC', sans-serif" }}>還沒有紀錄，按下方按鈕儲存今天的資產快照</div>
+            <div style={{ fontSize: 13, fontFamily: "'Noto Sans TC', sans-serif" }}>{onlyToday ? "已是最新紀錄，改天再回來看變化" : "還沒有紀錄，按下方按鈕儲存今天的資產快照"}</div>
           </div>
         )}
         <button onClick={onSaveSnapshot} style={{ width: "100%", marginTop: 14, padding: "13px", background: SAGE, color: "#fff", border: "none", borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
@@ -1281,7 +1284,11 @@ export default function App() {
 
   const handleSaveSnapshot = () => {
     const total = calcTotal(assets, rates);
-    setSnapshots(prev => [...prev, { ts: Date.now(), date: todayStr(), total }]);
+    const today = todayStr();
+    setSnapshots(prev => {
+      const filtered = prev.filter(s => s.date !== today);
+      return [...filtered, { ts: Date.now(), date: today, total }];
+    });
   };
 
   const handleExport = () => {
