@@ -1359,6 +1359,9 @@ export default function App() {
           <span style={{ fontSize: 9, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 600 }}>備份/還原</span>
         </button>
         {showBackup && (
+          <div onClick={() => setShowBackup(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
+        )}
+        {showBackup && (
           <div style={{ position: "absolute", top: 90, right: 20, background: "var(--input)", borderRadius: 14, border: "var(--card-border)", borderTop: "var(--card-top)", boxShadow: "0 8px 24px rgba(0,0,0,0.18)", padding: "8px 0", zIndex: 100, minWidth: 150 }}>
             <button onClick={() => { handleExport(); setShowBackup(false); }} style={{ width: "100%", padding: "12px 16px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text)", fontFamily: "'Noto Sans TC', sans-serif" }}>
               <Upload size={16} color={SAGE} />
