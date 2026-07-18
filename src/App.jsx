@@ -890,6 +890,11 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
                       <input type="number" min={1} placeholder="期數" value={form.times} onChange={e => setForm(p => ({ ...p, times: e.target.value }))} style={{ ...inputStyle, width: 70 }} />
                       <span style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>個月</span>
                     </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>每月扣款日</span>
+                      <input type="number" min={1} max={31} placeholder="幾號" value={form.day} onChange={e => setForm(p => ({ ...p, day: e.target.value }))} style={{ ...inputStyle, width: 80 }} />
+                      <span style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>號</span>
+                    </div>
                     <input type="number" placeholder="首期金額（與每期不同時才填）" value={form.firstAmount} onChange={e => setForm(p => ({ ...p, firstAmount: e.target.value }))} style={{ ...inputStyle }} />
                   </>
                 ) : (
