@@ -306,7 +306,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ background: "var(--hero-grad)", borderTop: "var(--hero-top)", borderRadius: 18, padding: "24px 22px", color: "#fff" }}>
         <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>總資產（折合台幣）</div>
-        <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif", background: "var(--gold-text-grad)", WebkitBackgroundClip: "var(--gold-text-grad)" === "none" ? "unset" : "text", backgroundClip: "text", color: "var(--gold-text-grad)" === "none" ? "#fff" : "transparent" }}>{formatNT(totalTWD)}</div>
+        <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif", background: "var(--gold-text-grad)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{formatNT(totalTWD)}</div>
         <div style={{ display: "flex", gap: 3, marginTop: 14, borderRadius: 99, overflow: "hidden", height: 8 }}>
           {ASSET_TYPES.map(t => (
             <div key={t.key} style={{ flex: typeTotals[t.key] || 0.001, background: t.key === "cash" ? "rgba(255,255,255,0.85)" : t.key === "stock" ? "rgba(255,255,255,0.6)" : t.key === "ustock" ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.25)" }} />

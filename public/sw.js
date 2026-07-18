@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finance-app-v1';
+const CACHE_NAME = 'finance-app-v2';
 const BASE = '/my-finance-app';
 
 // 安裝：預快取核心檔案
@@ -24,6 +24,18 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   if (!e.request.url.startsWith(self.location.origin)) return;
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, copy));
+        return res;
+      }).catch(() =>
+        caches.match(e.request).then(m => m || caches.match(BASE + '/index.html'))
+      )
+    );
+    return;
+  }
   e.respondWith(
     caches.open(CACHE_NAME).then(cache =>
       cache.match(e.request).then(cached => {
