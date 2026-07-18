@@ -3,7 +3,7 @@ import {
   Home, Wallet, UtensilsCrossed, ReceiptText, TrendingUp,
   Landmark, BarChart2, DollarSign, ArrowLeftRight,
   ArrowDownCircle, ArrowUpCircle, CalendarMinus, CalendarPlus,
-  Camera, ClipboardList, Save, PiggyBank, ChevronRight,
+  Camera, ClipboardList, Save, ChevronRight,
   Sun, Palmtree, HardDrive, Upload, Download
 } from "lucide-react";
 
@@ -289,7 +289,6 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
   const totalExpense = fixedExpense + thisMonthExtraExpense;
   const totalIncome  = fixedIncome + thisMonthExtraIncome;
   const netMonthly   = totalIncome - totalExpense;
-  const savingsRate  = fixedIncome > 0 ? Math.round(((fixedIncome - fixedExpense) / fixedIncome) * 100) : 0;
 
   const typeTotals = Object.fromEntries(ASSET_TYPES.map(t => [
     t.key,
@@ -445,21 +444,12 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
 }function AssetsPage({ assets, setAssets, rates, setRates }) {
   const [activeType, setActiveType] = useState("cash");
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", amount: "", currency: "USD", note: "", shares: "", price: "" });
+  const [form, setForm] = useState({ name: "", amount: "", currency: "USD", shares: "", price: "" });
   const [editId, setEditId] = useState(null);
   const [editNameId, setEditNameId] = useState(null);
   const [quickUpdate, setQuickUpdate] = useState(false);
   const quickPrices = useRef({});
   const addRef = useRef(null);
-
-  const totalTWD = useMemo(() => calcTotal(assets, rates), [assets, rates]);
-  const typeTotals = useMemo(() => Object.fromEntries(ASSET_TYPES.map(t => [
-    t.key,
-    t.key === "ustock"
-      ? (assets.ustock || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD", rates), 0)
-      : (assets[t.key] || []).reduce((s, item) =>
-          s + toTWD(item.amount, t.key === "foreign" ? item.currency : "TWD", rates), 0)
-  ])), [assets, rates]);
 
   const activeItems = assets[activeType] || [];
   const activeInfo = ASSET_TYPES.find(t => t.key === activeType);
@@ -481,17 +471,16 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
       setAssets(prev => ({ ...prev, ustock: [...(prev.ustock || []), {
         id: Date.now(), name: form.name,
         shares: parseFloat(form.shares) || 0,
-        price: parseFloat(form.price) || 0,
-        note: form.note
+        price: parseFloat(form.price) || 0
       }]}));
     } else {
       if (!form.amount) return;
       setAssets(prev => ({ ...prev, [activeType]: [...(prev[activeType] || []), {
-        id: Date.now(), name: form.name, amount: parseFloat(form.amount) || 0, note: form.note,
+        id: Date.now(), name: form.name, amount: parseFloat(form.amount) || 0,
         ...(activeType === "foreign" ? { currency: form.currency } : {})
       }]}));
     }
-    setForm({ name: "", amount: "", currency: "USD", note: "", shares: "", price: "" });
+    setForm({ name: "", amount: "", currency: "USD", shares: "", price: "" });
     setShowAdd(false);
   };
 
@@ -756,12 +745,6 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
   const handleShowAdd = () => {
     setShowAdd(!showAdd);
     setTimeout(() => { addRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100);
-  };
-
-  const repeatLabel = (item) => {
-    if (item.repeat === "once") return "一次性";
-    if (item.repeat === "fixed") return `共${item.times}個月`;
-    return "每年循環";
   };
 
   const addItem = () => {
@@ -1272,11 +1255,15 @@ export default function App() {
       if (next && (next.tagName === 'INPUT' || next.tagName === 'SELECT' || next.tagName === 'TEXTAREA')) return;
       setTimeout(() => { window.scrollTo(0, 0); }, 150);
     };
-    document.addEventListener('focusout', fix);
-    document.addEventListener('touchend', (e) => {
+    const fixSelect = (e) => {
       if (e.target.tagName === 'SELECT') setTimeout(() => window.scrollTo(0, 0), 300);
-    });
-    return () => document.removeEventListener('focusout', fix);
+    };
+    document.addEventListener('focusout', fix);
+    document.addEventListener('touchend', fixSelect);
+    return () => {
+      document.removeEventListener('focusout', fix);
+      document.removeEventListener('touchend', fixSelect);
+    };
   }, []);
 
   const handleSaveSnapshot = () => {
