@@ -319,6 +319,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
               <div style={{ display: "flex", justifyContent: "center", color: "#fff", opacity: 0.9 }}>{t.icon}</div>
               <div style={{ fontSize: 9, opacity: 0.75, marginTop: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>{t.key === "cash" ? "存款" : t.key === "stock" ? "股票" : t.key === "ustock" ? "美股" : "外幣"}</div>
               <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(typeTotals[t.key])}</div>
+              <div style={{ fontSize: 9, opacity: 0.6, fontFamily: "'Noto Sans TC', sans-serif" }}>{totalTWD > 0 ? Math.round((typeTotals[t.key] / totalTWD) * 100) : 0}%</div>
             </div>
           ))}
         </div>
@@ -499,40 +500,6 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 24, padding: "24px 22px", color: "#fff" }}>
-        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>資產總額（折合台幣）</div>
-        <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(totalTWD)}</div>
-        <div style={{ display: "flex", gap: 3, marginTop: 16, borderRadius: 99, overflow: "hidden", height: 8 }}>
-          {ASSET_TYPES.map(t => (<div key={t.key} style={{ flex: typeTotals[t.key] || 0.001, background: t.key === "cash" ? "rgba(255,255,255,0.85)" : t.key === "stock" ? "rgba(255,255,255,0.6)" : t.key === "ustock" ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.25)" }} />))}
-        </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
-          {ASSET_TYPES.map(t => (
-            <div key={t.key} style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 14, padding: "8px 4px", textAlign: "center" }}>
-              <div style={{ display: "flex", justifyContent: "center", color: "#fff", opacity: 0.9 }}>{t.icon}</div>
-              <div style={{ fontSize: 9, opacity: 0.8, marginTop: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>{t.key === "cash" ? "存款" : t.key === "stock" ? "股票" : t.key === "ustock" ? "美股" : "外幣"}</div>
-              <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(typeTotals[t.key])}</div>
-              <div style={{ fontSize: 9, opacity: 0.6, fontFamily: "'Noto Sans TC', sans-serif" }}>{totalTWD > 0 ? Math.round((typeTotals[t.key] / totalTWD) * 100) : 0}%</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <Card>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#333", marginBottom: 12, fontFamily: "'Noto Sans TC', sans-serif" }}>資產配置比例</div>
-        {ASSET_TYPES.map(t => (
-          <div key={t.key} style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ color: t.color, display: "flex" }}>{t.icon}</span>
-                <span style={{ fontSize: 13, color: "#555", fontFamily: "'Noto Sans TC', sans-serif" }}>{t.label}</span>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: t.color, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(typeTotals[t.key])}</span>
-            </div>
-            <ProgressBar value={typeTotals[t.key]} max={totalTWD} color={t.color} />
-          </div>
-        ))}
-      </Card>
-
       <div style={{ display: "flex", background: "#e8e5df", borderRadius: 14, padding: 4, gap: 4 }}>
         {ASSET_TYPES.map(t => (
           <button key={t.key} onClick={() => { setActiveType(t.key); setShowAdd(false); setEditId(null); setEditNameId(null); }}
@@ -589,7 +556,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
                       <div onClick={() => setEditNameId(item.id)} style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>{item.name}</div>
                     )}
                     <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>
-                      {activeType === "ustock" ? `${item.shares}股 × US$${item.price}` : item.note || (activeType === "foreign" ? item.currency : "台幣")}
+                      {activeType === "ustock" ? `${item.shares}股 × US${item.price}` : (activeType === "foreign" ? item.currency : "台幣")}
                       {activeType === "foreign" && ` · ${CURRENCY_LABELS[item.currency]}${item.amount.toLocaleString()}`}
                     </div>
                   </div>
@@ -653,8 +620,6 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
                 )}
               </div>
             )}
-            <input type="text" placeholder="備註（選填）" value={form.note} onChange={e => setForm(p => ({ ...p, note: e.target.value }))}
-              style={{ ...inputStyle, padding: "10px 14px", border: "1px solid #ddd", width: "100%", boxSizing: "border-box" }} />
             <button onClick={addItem} style={{ background: activeInfo.color, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
           </div>
         )}
