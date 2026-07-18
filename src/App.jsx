@@ -4,7 +4,7 @@ import {
   Landmark, BarChart2, DollarSign, ArrowLeftRight,
   ArrowDownCircle, ArrowUpCircle, CalendarMinus, CalendarPlus,
   Camera, ClipboardList, Save, ChevronRight,
-  Sun, Palmtree, HardDrive, Upload, Download, Lightbulb
+  Sun, Palmtree, HardDrive, Upload, Download, Lightbulb, X
 } from "lucide-react";
 
 const SAGE = "var(--sage)";
@@ -113,8 +113,8 @@ function ProgressBar({ value, max, color = SAGE }) {
 }
 function Card({ children, style = {} }) {
   return (
-    <div style={{ background: CARD, borderRadius: 20, padding: "18px 20px",
-      boxShadow: "var(--shadow)", ...style }}>
+    <div style={{ background: CARD, borderRadius: 16, padding: "18px 20px",
+      border: "var(--card-border)", borderTop: "var(--card-top)", ...style }}>
       {children}
     </div>
   );
@@ -304,9 +304,9 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 24, padding: "24px 22px", color: "#fff" }}>
+      <div style={{ background: "var(--hero-grad)", borderTop: "var(--hero-top)", borderRadius: 18, padding: "24px 22px", color: "#fff" }}>
         <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>總資產（折合台幣）</div>
-        <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(totalTWD)}</div>
+        <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif", background: "var(--gold-text-grad)", WebkitBackgroundClip: "var(--gold-text-grad)" === "none" ? "unset" : "text", backgroundClip: "text", color: "var(--gold-text-grad)" === "none" ? "#fff" : "transparent" }}>{formatNT(totalTWD)}</div>
         <div style={{ display: "flex", gap: 3, marginTop: 14, borderRadius: 99, overflow: "hidden", height: 8 }}>
           {ASSET_TYPES.map(t => (
             <div key={t.key} style={{ flex: typeTotals[t.key] || 0.001, background: t.key === "cash" ? "rgba(255,255,255,0.85)" : t.key === "stock" ? "rgba(255,255,255,0.6)" : t.key === "ustock" ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.25)" }} />
@@ -621,7 +621,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
                       <div style={{ fontSize: 10, color: "var(--faint)", fontFamily: "'Noto Sans TC', sans-serif" }}>點金額修改</div>
                     </div>
                   )}
-                  <button onClick={() => removeItem(item.id)} style={{ border: "none", background: "var(--red-soft)", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                  <button onClick={() => removeItem(item.id)} style={{ border: "none", background: "var(--red-soft)", borderRadius: 99, width: 26, height: 26, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}><X size={13} color={RED} strokeWidth={2.5} /></button>
                 </div>
               </div>
             </div>
@@ -689,7 +689,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 24, padding: "24px 22px", color: "#fff" }}>
+      <div style={{ background: "var(--hero-grad)", borderTop: "var(--hero-top)", borderRadius: 18, padding: "24px 22px", color: "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <UtensilsCrossed size={16} color="rgba(255,255,255,0.8)" />
           <span style={{ fontSize: 13, opacity: 0.8, fontFamily: "'Noto Sans TC', sans-serif" }}>本月伙食費估算</span>
@@ -832,7 +832,7 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
         ))}
       </div>
 
-      <div style={{ background: `linear-gradient(135deg, ${SAGE_DARK} 0%, ${SAGE} 100%)`, borderRadius: 20, padding: "20px 22px", color: "#fff" }}>
+      <div style={{ background: "var(--hero-grad)", borderRadius: 20, padding: "20px 22px", color: "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, opacity: 0.75 }}>
           <span style={{ color: "#fff" }}>
             {activeTab === "expense" ? <ArrowDownCircle size={14} /> : activeTab === "income" ? <ArrowUpCircle size={14} /> : activeTab === "onetime" ? <CalendarMinus size={14} /> : <CalendarPlus size={14} />}
@@ -928,7 +928,7 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span onClick={() => startEdit(item, "expense")} style={{ fontSize: 15, fontWeight: 700, color: RED, fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>-{formatNT(item.amount)}</span>
-                  <button onClick={() => removeExpense(item.id)} style={{ border: "none", background: "var(--red-soft)", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                  <button onClick={() => removeExpense(item.id)} style={{ border: "none", background: "var(--red-soft)", borderRadius: 99, width: 26, height: 26, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}><X size={13} color={RED} strokeWidth={2.5} /></button>
                 </div>
               </div>
             )}
@@ -950,7 +950,7 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span onClick={() => startEdit(item, "income")} style={{ fontSize: 15, fontWeight: 700, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>+{formatNT(item.amount)}</span>
-                  <button onClick={() => removeIncome(item.id)} style={{ border: "none", background: "var(--red-soft)", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                  <button onClick={() => removeIncome(item.id)} style={{ border: "none", background: "var(--red-soft)", borderRadius: 99, width: 26, height: 26, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}><X size={13} color={RED} strokeWidth={2.5} /></button>
                 </div>
               </div>
             )}
@@ -1018,7 +1018,7 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
                               <span onClick={() => startEdit(item, activeTab)} style={{ fontSize: 15, fontWeight: 700, color: isIncome ? SAGE : RED, fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>
                                 {isIncome ? "+" : "-"}{formatNT(amt)}
                               </span>
-                              <button onClick={() => isIncome ? removeOneTimeIncome(item.id) : removeOneTime(item.id)} style={{ border: "none", background: "var(--red-soft)", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                              <button onClick={() => isIncome ? removeOneTimeIncome(item.id) : removeOneTime(item.id)} style={{ border: "none", background: "var(--red-soft)", borderRadius: 99, width: 26, height: 26, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}><X size={13} color={RED} strokeWidth={2.5} /></button>
                             </div>
                           </div>
                         )}
@@ -1359,7 +1359,7 @@ export default function App() {
           <span style={{ fontSize: 9, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 600 }}>備份/還原</span>
         </button>
         {showBackup && (
-          <div style={{ position: "absolute", top: 90, right: 20, background: "var(--input)", borderRadius: 14, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", padding: "8px 0", zIndex: 100, minWidth: 150 }}>
+          <div style={{ position: "absolute", top: 90, right: 20, background: "var(--input)", borderRadius: 14, border: "var(--card-border)", borderTop: "var(--card-top)", boxShadow: "0 8px 24px rgba(0,0,0,0.18)", padding: "8px 0", zIndex: 100, minWidth: 150 }}>
             <button onClick={() => { handleExport(); setShowBackup(false); }} style={{ width: "100%", padding: "12px 16px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text)", fontFamily: "'Noto Sans TC', sans-serif" }}>
               <Upload size={16} color={SAGE} />
               匯出備份
