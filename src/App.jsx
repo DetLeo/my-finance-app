@@ -448,6 +448,8 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
   const [form, setForm] = useState({ name: "", amount: "", currency: "USD", note: "", shares: "", price: "" });
   const [editId, setEditId] = useState(null);
   const [editNameId, setEditNameId] = useState(null);
+  const [quickUpdate, setQuickUpdate] = useState(false);
+  const quickPrices = useRef({});
   const addRef = useRef(null);
 
   const totalTWD = useMemo(() => calcTotal(assets, rates), [assets, rates]);
@@ -502,7 +504,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", background: "#e8e5df", borderRadius: 14, padding: 4, gap: 4 }}>
         {ASSET_TYPES.map(t => (
-          <button key={t.key} onClick={() => { setActiveType(t.key); setShowAdd(false); setEditId(null); setEditNameId(null); }}
+          <button key={t.key} onClick={() => { setActiveType(t.key); setShowAdd(false); setEditId(null); setEditNameId(null); setQuickUpdate(false); }}
             style={{ flex: 1, padding: "10px 0", border: "none", borderRadius: 12,
               background: activeType === t.key ? SAGE : "transparent",
               color: activeType === t.key ? "#fff" : t.color,
@@ -513,10 +515,44 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
       </div>
 
       <Card style={{ padding: "14px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-          <span style={{ color: activeInfo.color, display: "flex" }}>{activeInfo.icon}</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{activeInfo.label}</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: activeInfo.color, display: "flex" }}>{activeInfo.icon}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{activeInfo.label}</span>
+          </div>
+          {activeType === "ustock" && activeItems.length > 0 && !quickUpdate && (
+            <button onClick={() => { quickPrices.current = {}; setQuickUpdate(true); }}
+              style={{ border: "none", background: "#f0ecf5", color: PURPLE, borderRadius: 99, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>
+              更新股價
+            </button>
+          )}
         </div>
+
+        {activeType === "ustock" && quickUpdate && (
+          <div style={{ marginBottom: 10, padding: 12, background: "#f0ecf5", borderRadius: 14 }}>
+            {activeItems.map(item => (
+              <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0" }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.name}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, color: "#aaa" }}>US$</span>
+                  <input type="number" defaultValue={item.price}
+                    onChange={e => { quickPrices.current[item.id] = e.target.value; }}
+                    style={{ width: 90, padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${PURPLE}`, fontSize: 16, textAlign: "right", fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none", boxSizing: "border-box" }} />
+                </div>
+              </div>
+            ))}
+            <button onClick={() => {
+              setAssets(prev => ({ ...prev, ustock: (prev.ustock || []).map(i => {
+                const v = parseFloat(quickPrices.current[i.id]);
+                return !isNaN(v) && v > 0 ? { ...i, price: v } : i;
+              })}));
+              setQuickUpdate(false);
+            }}
+              style={{ width: "100%", marginTop: 8, background: PURPLE, color: "#fff", border: "none", borderRadius: 10, padding: "10px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>
+              完成更新
+            </button>
+          </div>
+        )}
 
         {activeType === "foreign" && (
           <div style={{ marginBottom: 10, padding: "6px 0 10px", borderBottom: "1px solid #f0ede8", display: "flex", gap: 16, alignItems: "center" }}>
