@@ -871,7 +871,7 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
                 <select value={form.repeat} onChange={e => setForm(p => ({ ...p, repeat: e.target.value }))} style={{ ...inputStyle }}>
                   <option value="loop">每年循環</option>
                   <option value="once">一次性（用完消失）</option>
-                  <option value="fixed">固定期數（本月開始）</option>
+                  <option value="fixed">固定期數（分期）</option>
                 </select>
                 {form.repeat === "fixed" ? (
                   <>
