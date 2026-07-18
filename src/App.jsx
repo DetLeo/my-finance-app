@@ -4,7 +4,7 @@ import {
   Landmark, BarChart2, DollarSign, ArrowLeftRight,
   ArrowDownCircle, ArrowUpCircle, CalendarMinus, CalendarPlus,
   Camera, ClipboardList, Save, ChevronRight,
-  Sun, Palmtree, HardDrive, Upload, Download
+  Sun, Palmtree, HardDrive, Upload, Download, Lightbulb
 } from "lucide-react";
 
 const SAGE = "#5C6E52";
@@ -407,12 +407,16 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
         </div>
         {snapshots.length >= 2 ? (() => {
           const pts = snapshots.slice(-12);
-          const W = 280, H = 90, PAD = 8;
+          const W = 280, H = 90, PAD = 8, AXIS = 38;
           const vals = pts.map(p => p.total);
           const min = Math.min(...vals), max = Math.max(...vals);
           const range = max - min || 1;
+          const fmtWan = v => {
+            const w = v / 10000;
+            return (w >= 100 ? Math.round(w) : +w.toFixed(1)) + "萬";
+          };
           const xy = pts.map((p, i) => [
-            PAD + (i / (pts.length - 1)) * (W - PAD * 2),
+            AXIS + PAD + (i / (pts.length - 1)) * (W - AXIS - PAD * 2),
             H - PAD - ((p.total - min) / range) * (H - PAD * 2)
           ]);
           const line = xy.map(([x, y], i) => (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1)).join(" ");
@@ -421,6 +425,12 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
           return (
             <>
               <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", height: "auto", display: "block" }}>
+                {[[max, PAD], [(max+min)/2, H/2], [min, H-PAD]].map(([v, y], i) => (
+                  <g key={i}>
+                    <line x1={AXIS} y1={y} x2={W-PAD} y2={y} stroke="#e0ddd7" strokeWidth="0.7" strokeDasharray="3 3" />
+                    <text x={AXIS - 5} y={y + 3} textAnchor="end" fontSize="8.5" fill="#bbb" fontFamily="'Noto Sans TC', sans-serif">{fmtWan(v)}</text>
+                  </g>
+                ))}
                 <path d={line + " L" + xy[xy.length-1][0] + "," + (H-2) + " L" + xy[0][0] + "," + (H-2) + " Z"} fill={color} opacity="0.08" />
                 <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 {xy.map(([x, y], i) => (
@@ -721,8 +731,11 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
       </Card>
 
       <Card>
-        <div style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", lineHeight: 1.6 }}>
-          💡 輸入完金額後點其他地方完成輸入，系統自動計算本月伙食費並加入月支出。
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <Lightbulb size={16} color={GOLD} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", lineHeight: 1.6 }}>
+            輸入完金額後點其他地方完成輸入，系統自動計算本月伙食費並加入月支出。
+          </div>
         </div>
       </Card>
     </div>
