@@ -9,7 +9,6 @@ import {
 
 const SAGE = "#5C6E52";
 const SAGE_DARK = "#4a5942";
-const SAGE_LIGHT = "#8fa882";
 const BG = "#f2f0eb";
 const CARD = "#ffffff";
 const RED = "#c0392b";
@@ -21,14 +20,14 @@ const PAGES = ["overview", "assets", "food", "accounts", "forecast"];
 const MONTHS = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 
 const ASSET_TYPES = [
-  { key: "cash",    label: "現金／存款", icon: <Landmark size={18} />,       color: SAGE,   colorBg: "#e8f0e5" },
-  { key: "stock",   label: "股票／基金", icon: <BarChart2 size={18} />,       color: BLUE,   colorBg: "#e5eef5" },
-  { key: "ustock",  label: "美股持倉",   icon: <DollarSign size={18} />,      color: PURPLE, colorBg: "#f0ecf5" },
-  { key: "foreign", label: "外幣資產",   icon: <ArrowLeftRight size={18} />,  color: GOLD,   colorBg: "#f5ede0" },
+  { key: "cash",    label: "現金／存款", icon: <Landmark size={18} />,      color: SAGE,   colorBg: "#e8f0e5" },
+  { key: "stock",   label: "股票／基金", icon: <BarChart2 size={18} />,      color: BLUE,   colorBg: "#e5eef5" },
+  { key: "ustock",  label: "美股持倉",   icon: <DollarSign size={18} />,     color: PURPLE, colorBg: "#f0ecf5" },
+  { key: "foreign", label: "外幣資產",   icon: <ArrowLeftRight size={18} />, color: GOLD,   colorBg: "#f5ede0" },
 ];
 
-const CURRENCY_RATES = { TWD: 1, USD: 32.5, JPY: 0.22, EUR: 35.5, HKD: 4.2 };
-const CURRENCY_LABELS = { TWD: "NT$", USD: "US$", JPY: "¥", EUR: "€", HKD: "HK$" };
+const DEFAULT_RATES = { TWD: 1, USD: 32.5, JPY: 0.22 };
+const CURRENCY_LABELS = { TWD: "NT$", USD: "US$", JPY: "¥" };
 
 const DEFAULT_ASSETS = { cash: [], stock: [], ustock: [], foreign: [] };
 const DEFAULT_EXPENSES = [];
@@ -44,24 +43,24 @@ function loadData(key, fallback) {
     return raw ? JSON.parse(raw) : fallback;
   } catch { return fallback; }
 }
-
 function saveData(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
-
 function formatNT(n) { return "NT$" + Math.round(n).toLocaleString(); }
-function toTWD(amount, currency = "TWD") { return amount * (CURRENCY_RATES[currency] || 1); }
+function toTWD(amount, currency = "TWD", rates = DEFAULT_RATES) {
+  return amount * (rates[currency] || 1);
+}
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
 }
-function calcTotal(assets) {
+function calcTotal(assets, rates = DEFAULT_RATES) {
   return Object.entries(assets).reduce((sum, [type, items]) => {
     if (type === "ustock") {
-      return sum + (items || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD"), 0);
+      return sum + (items || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD", rates), 0);
     }
     return sum + (items || []).reduce((s, item) =>
-      s + toTWD(item.amount, type === "foreign" ? item.currency : "TWD"), 0);
+      s + toTWD(item.amount, type === "foreign" ? item.currency : "TWD", rates), 0);
   }, 0);
 }
 function truncate(str) {
@@ -81,6 +80,13 @@ function calcFoodMonthly(food) {
   }
   return weekdays * ((food.weekdayB||0) + (food.weekdayL||0) + (food.weekdayD||0)) +
          weekends * ((food.weekendB||0) + (food.weekendL||0) + (food.weekendD||0));
+}
+function amountFor(item, calMonth, calYear) {
+  if (item.repeat === "fixed" && item.firstAmount) {
+    const startY = item.year || new Date().getFullYear();
+    if (calMonth === item.month && calYear === startY) return item.firstAmount;
+  }
+  return item.amount;
 }
 
 function shouldAppear(item, calMonth, calYear) {
@@ -105,7 +111,6 @@ function ProgressBar({ value, max, color = SAGE }) {
     </div>
   );
 }
-
 function Card({ children, style = {} }) {
   return (
     <div style={{ background: CARD, borderRadius: 20, padding: "18px 20px",
@@ -114,7 +119,6 @@ function Card({ children, style = {} }) {
     </div>
   );
 }
-
 function Tab({ label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
@@ -126,7 +130,6 @@ function Tab({ label, active, onClick }) {
     }}>{label}</button>
   );
 }
-
 function NavItem({ icon, label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
@@ -143,42 +146,40 @@ function NavItem({ icon, label, active, onClick }) {
 
 function CombinedOneTimeList({ expenseItems, incomeItems }) {
   const [expanded, setExpanded] = useState(false);
-  const hasAny = (expenseItems && expenseItems.length > 0) || (incomeItems && incomeItems.length > 0);
-  if (!hasAny) return null;
+  const total = (expenseItems?.length || 0) + (incomeItems?.length || 0);
+  if (total === 0) return null;
   return (
-    <div style={{ marginTop: 6, display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
-      {!expanded ? (
-        <div onClick={() => setExpanded(true)}
-          style={{ background: "#e8e5df", borderRadius: 8, padding: "3px 10px", cursor: "pointer" }}>
-          <span style={{ fontSize: 11, color: "#888", fontWeight: 700 }}>···</span>
-        </div>
-      ) : (
-        <>
+    <div style={{ marginTop: 8 }}>
+      {expanded && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8, justifyContent: "center" }}>
           {(expenseItems || []).map(o => (
             <div key={o.id} style={{ background: "#fde8e5", borderRadius: 8, padding: "3px 10px" }}>
               <span style={{ fontSize: 11, color: RED, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif", whiteSpace: "nowrap" }}>
-                📅 {truncate(o.name)} -{formatNT(o.amount)}
+                {truncate(o.name)} -{formatNT(o.amount)}
               </span>
             </div>
           ))}
           {(incomeItems || []).map(o => (
             <div key={o.id} style={{ background: "#e8f0e5", borderRadius: 8, padding: "3px 10px" }}>
               <span style={{ fontSize: 11, color: SAGE, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif", whiteSpace: "nowrap" }}>
-                🎉 {truncate(o.name)} +{formatNT(o.amount)}
+                {truncate(o.name)} +{formatNT(o.amount)}
               </span>
             </div>
           ))}
-          <div onClick={() => setExpanded(false)}
-            style={{ background: "#e8e5df", borderRadius: 8, padding: "3px 10px", cursor: "pointer" }}>
-            <span style={{ fontSize: 11, color: "#888", fontWeight: 700 }}>↑</span>
-          </div>
-        </>
+        </div>
       )}
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div onClick={() => setExpanded(!expanded)}
+          style={{ display: "flex", alignItems: "center", gap: 4, background: "#eef2ea", borderRadius: 99, padding: "4px 14px", cursor: "pointer" }}>
+          <ChevronRight size={12} color={SAGE} style={{ transform: expanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.2s" }} />
+          <span style={{ fontSize: 11, color: SAGE, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif" }}>
+            {expanded ? "收起" : total + " 筆特定收支"}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
-
-function OneTimeList({ items, color, icon }) { return null; }
 
 function SwipeContainer({ pageIndex, setPageIndex, children }) {
   const containerRef = useRef(null);
@@ -205,7 +206,6 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
-
     const handleTouchStart = (e) => {
       startXRef.current = e.touches[0].clientX;
       startYRef.current = e.touches[0].clientY;
@@ -215,18 +215,15 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
       const idx = pageIndexRef.current;
       setTranslate(-idx * WIDTH, false);
     };
-
     const handleTouchMove = (e) => {
       if (!isDraggingRef.current) return;
       const dx = e.touches[0].clientX - startXRef.current;
       const dy = e.touches[0].clientY - startYRef.current;
-
       if (isHorizontalRef.current === null) {
         if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
           isHorizontalRef.current = Math.abs(dx) > Math.abs(dy);
         } else return;
       }
-
       if (isHorizontalRef.current) {
         e.preventDefault();
         e.stopPropagation();
@@ -239,7 +236,6 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
         setTranslate(x, false);
       }
     };
-
     const handleTouchEnd = () => {
       if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
@@ -252,11 +248,9 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
       setPageIndex(newIndex);
       setTranslate(-newIndex * WIDTH, true);
     };
-
     el.addEventListener('touchstart', handleTouchStart, { passive: true });
     el.addEventListener('touchmove', handleTouchMove, { passive: false });
     el.addEventListener('touchend', handleTouchEnd, { passive: true });
-
     return () => {
       el.removeEventListener('touchstart', handleTouchStart);
       el.removeEventListener('touchmove', handleTouchMove);
@@ -264,29 +258,22 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
     };
   }, []);
 
-  useEffect(() => {
-    setTranslate(-pageIndex * WIDTH, true);
-  }, [pageIndex]);
+  useEffect(() => { setTranslate(-pageIndex * WIDTH, true); }, [pageIndex]);
 
   return (
     <div ref={wrapperRef} style={{ overflow: "hidden", flex: 1, position: "relative" }}>
-      <div
-        ref={containerRef}
-        style={{
-          display: "flex",
-          width: `${PAGES.length * 100}%`,
-          height: "100%",
-          transform: `translateX(-${pageIndex * WIDTH}px)`,
-          willChange: "transform",
-        }}
-      >
+      <div ref={containerRef} style={{
+        display: "flex", width: `${PAGES.length * 100}%`, height: "100%",
+        transform: `translateX(-${pageIndex * WIDTH}px)`, willChange: "transform",
+      }}>
         {children}
       </div>
     </div>
   );
 }
-function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, oneTimeIncome, oneTime, food }) {
-  const totalTWD = calcTotal(assets);
+
+function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, oneTimeIncome, oneTime, food, rates }) {
+  const totalTWD = calcTotal(assets, rates);
   const foodMonthly = calcFoodMonthly(food);
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -307,10 +294,11 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
   const typeTotals = Object.fromEntries(ASSET_TYPES.map(t => [
     t.key,
     t.key === "ustock"
-      ? (assets.ustock || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD"), 0)
+      ? (assets.ustock || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD", rates), 0)
       : (assets[t.key] || []).reduce((s, item) =>
-          s + toTWD(item.amount, t.key === "foreign" ? item.currency : "TWD"), 0)
+          s + toTWD(item.amount, t.key === "foreign" ? item.currency : "TWD", rates), 0)
   ]));
+
   const lastSnap = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
   const diff = lastSnap ? totalTWD - lastSnap.total : null;
   const daysSince = lastSnap ? Math.round((Date.now() - lastSnap.ts) / 86400000) : null;
@@ -402,38 +390,73 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
       </Card>
 
       <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <PiggyBank size={16} color={SAGE} />
-            <span style={{ fontSize: 14, color: "#555", fontFamily: "'Noto Sans TC', sans-serif" }}>本月儲蓄率</span>
+            <TrendingUp size={16} color={SAGE} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>資產趨勢</span>
           </div>
-          <span style={{ background: savingsRate >= 20 ? "#e8f0e5" : "#fde8e5", color: savingsRate >= 20 ? SAGE : RED, borderRadius: 99, padding: "3px 12px", fontSize: 13, fontWeight: 700, fontFamily: "'Noto Sans TC', sans-serif" }}>{savingsRate}%</span>
+          {snapshots.length >= 2 && (() => {
+            const pts = snapshots.slice(-12);
+            const chg = pts[pts.length-1].total - pts[0].total;
+            return (
+              <span style={{ background: chg >= 0 ? "#e8f0e5" : "#fde8e5", color: chg >= 0 ? SAGE : RED, borderRadius: 99, padding: "3px 12px", fontSize: 13, fontWeight: 700, fontFamily: "'Noto Sans TC', sans-serif" }}>
+                {chg >= 0 ? "+" : ""}{formatNT(chg)}
+              </span>
+            );
+          })()}
         </div>
-        <ProgressBar value={fixedIncome - fixedExpense} max={fixedIncome} color={savingsRate >= 20 ? SAGE : RED} />
-        <div style={{ marginTop: 8, fontSize: 12, color: "#999", fontFamily: "'Noto Sans TC', sans-serif" }}>固定收支基準，不含特定收支</div>
+        {snapshots.length >= 2 ? (() => {
+          const pts = snapshots.slice(-12);
+          const W = 280, H = 90, PAD = 8;
+          const vals = pts.map(p => p.total);
+          const min = Math.min(...vals), max = Math.max(...vals);
+          const range = max - min || 1;
+          const xy = pts.map((p, i) => [
+            PAD + (i / (pts.length - 1)) * (W - PAD * 2),
+            H - PAD - ((p.total - min) / range) * (H - PAD * 2)
+          ]);
+          const line = xy.map(([x, y], i) => (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1)).join(" ");
+          const up = pts[pts.length-1].total >= pts[0].total;
+          const color = up ? SAGE : RED;
+          return (
+            <>
+              <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", height: "auto", display: "block" }}>
+                <path d={line + " L" + xy[xy.length-1][0] + "," + (H-2) + " L" + xy[0][0] + "," + (H-2) + " Z"} fill={color} opacity="0.08" />
+                <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                {xy.map(([x, y], i) => (
+                  <circle key={i} cx={x} cy={y} r={i === xy.length-1 ? 4 : 2.5} fill={i === xy.length-1 ? color : "#fff"} stroke={color} strokeWidth="1.5" />
+                ))}
+              </svg>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                <span style={{ fontSize: 10, color: "#bbb", fontFamily: "'Noto Sans TC', sans-serif" }}>{pts[0].date}</span>
+                <span style={{ fontSize: 10, color: "#bbb", fontFamily: "'Noto Sans TC', sans-serif" }}>{pts[pts.length-1].date}</span>
+              </div>
+            </>
+          );
+        })() : (
+          <div style={{ textAlign: "center", padding: "14px 0", fontSize: 13, color: "#bbb", fontFamily: "'Noto Sans TC', sans-serif" }}>
+            多按幾次資產快照，就能看到趨勢線
+          </div>
+        )}
       </Card>
     </div>
   );
-}
-function AssetsPage({ assets, setAssets }) {
+}function AssetsPage({ assets, setAssets, rates, setRates }) {
   const [activeType, setActiveType] = useState("cash");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", amount: "", currency: "USD", note: "", shares: "", price: "" });
   const [editId, setEditId] = useState(null);
-  const [editVal, setEditVal] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editShares, setEditShares] = useState("");
-  const [editPrice, setEditPrice] = useState("");
+  const [editNameId, setEditNameId] = useState(null);
   const addRef = useRef(null);
 
-  const totalTWD = useMemo(() => calcTotal(assets), [assets]);
+  const totalTWD = useMemo(() => calcTotal(assets, rates), [assets, rates]);
   const typeTotals = useMemo(() => Object.fromEntries(ASSET_TYPES.map(t => [
     t.key,
     t.key === "ustock"
-      ? (assets.ustock || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD"), 0)
+      ? (assets.ustock || []).reduce((s, item) => s + toTWD(item.shares * item.price, "USD", rates), 0)
       : (assets[t.key] || []).reduce((s, item) =>
-          s + toTWD(item.amount, t.key === "foreign" ? item.currency : "TWD"), 0)
-  ])), [assets]);
+          s + toTWD(item.amount, t.key === "foreign" ? item.currency : "TWD", rates), 0)
+  ])), [assets, rates]);
 
   const activeItems = assets[activeType] || [];
   const activeInfo = ASSET_TYPES.find(t => t.key === activeType);
@@ -442,6 +465,11 @@ function AssetsPage({ assets, setAssets }) {
     setShowAdd(!showAdd);
     setTimeout(() => { addRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100);
   };
+
+  const updateItem = (id, patch) => setAssets(prev => ({
+    ...prev,
+    [activeType]: (prev[activeType] || []).map(i => i.id === id ? { ...i, ...patch } : i)
+  }));
 
   const addItem = () => {
     if (!form.name) return;
@@ -466,25 +494,8 @@ function AssetsPage({ assets, setAssets }) {
 
   const removeItem = (id) => setAssets(prev => ({ ...prev, [activeType]: (prev[activeType] || []).filter(i => i.id !== id) }));
 
-  const saveEdit = (id) => {
-    if (activeType === "ustock") {
-      setAssets(prev => ({
-        ...prev, ustock: (prev.ustock || []).map(i => i.id === id ? {
-          ...i, name: editName || i.name,
-          shares: parseFloat(editShares) || i.shares,
-          price: parseFloat(editPrice) || i.price
-        } : i)
-      }));
-    } else {
-      const val = parseFloat(editVal);
-      if (!isNaN(val)) setAssets(prev => ({
-        ...prev, [activeType]: (prev[activeType] || []).map(i => i.id === id ? { ...i, amount: val, name: editName || i.name } : i)
-      }));
-    }
-    setEditId(null); setEditVal(""); setEditName(""); setEditShares(""); setEditPrice("");
-  };
-
   const inputStyle = { padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 16, fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none" };
+  const quickInput = { padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${activeInfo.color}`, fontSize: 16, fontFamily: "'Noto Sans TC', sans-serif", color: "#333", background: "#fff", outline: "none", textAlign: "right", boxSizing: "border-box" };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -524,7 +535,7 @@ function AssetsPage({ assets, setAssets }) {
 
       <div style={{ display: "flex", background: "#e8e5df", borderRadius: 14, padding: 4, gap: 4 }}>
         {ASSET_TYPES.map(t => (
-          <button key={t.key} onClick={() => { setActiveType(t.key); setShowAdd(false); }}
+          <button key={t.key} onClick={() => { setActiveType(t.key); setShowAdd(false); setEditId(null); setEditNameId(null); }}
             style={{ flex: 1, padding: "10px 0", border: "none", borderRadius: 12,
               background: activeType === t.key ? SAGE : "transparent",
               color: activeType === t.key ? "#fff" : t.color,
@@ -539,60 +550,78 @@ function AssetsPage({ assets, setAssets }) {
           <span style={{ color: activeInfo.color, display: "flex" }}>{activeInfo.icon}</span>
           <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{activeInfo.label}</span>
         </div>
+
+        {activeType === "foreign" && (
+          <div style={{ marginBottom: 10, padding: "6px 0 10px", borderBottom: "1px solid #f0ede8", display: "flex", gap: 16, alignItems: "center" }}>
+            {Object.keys(DEFAULT_RATES).filter(c => c !== "TWD").map(c => (
+              <div key={c} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                <span style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>1{c}=</span>
+                <input type="number" defaultValue={rates[c]}
+                  onBlur={e => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val) && val > 0) setRates(prev => ({ ...prev, [c]: val }));
+                  }}
+                  style={{ width: 48, border: "none", borderBottom: "1px solid #ddd", background: "transparent", fontSize: 12, color: "#888", outline: "none", textAlign: "center", padding: "2px 0", fontFamily: "'Noto Sans TC', sans-serif" }}
+                />
+                <span style={{ fontSize: 11, color: "#aaa" }}>NT$</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {activeItems.map(item => {
           const twdVal = activeType === "ustock"
-            ? toTWD(item.shares * item.price, "USD")
-            : toTWD(item.amount, activeType === "foreign" ? item.currency : "TWD");
+            ? toTWD(item.shares * item.price, "USD", rates)
+            : toTWD(item.amount, activeType === "foreign" ? item.currency : "TWD", rates);
           return (
             <div key={item.id} style={{ padding: "11px 0", borderBottom: "1px solid #f0ede8" }}>
-              {editId === item.id ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="名稱"
-                    style={{ ...inputStyle, border: `1px solid ${activeInfo.color}`, width: "100%", boxSizing: "border-box" }} />
-                  {activeType === "ustock" ? (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input type="number" value={editShares} onChange={e => setEditShares(e.target.value)} placeholder="股數"
-                        style={{ ...inputStyle, flex: 1, minWidth: 0, border: `1px solid ${activeInfo.color}` }} />
-                      <input type="number" value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="收盤價USD"
-                        style={{ ...inputStyle, flex: 1, minWidth: 0, border: `1px solid ${activeInfo.color}` }} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 12, background: activeInfo.colorBg, display: "flex", alignItems: "center", justifyContent: "center", color: activeInfo.color, flexShrink: 0 }}>
+                    {activeInfo.icon}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {editNameId === item.id ? (
+                      <input autoFocus defaultValue={item.name}
+                        onBlur={e => { if (e.target.value.trim()) updateItem(item.id, { name: e.target.value.trim() }); setEditNameId(null); }}
+                        style={{ ...inputStyle, padding: "4px 8px", fontSize: 14, width: "100%", boxSizing: "border-box", border: `1.5px solid ${activeInfo.color}` }} />
+                    ) : (
+                      <div onClick={() => setEditNameId(item.id)} style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>{item.name}</div>
+                    )}
+                    <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>
+                      {activeType === "ustock" ? `${item.shares}股 × US$${item.price}` : item.note || (activeType === "foreign" ? item.currency : "台幣")}
+                      {activeType === "foreign" && ` · ${CURRENCY_LABELS[item.currency]}${item.amount.toLocaleString()}`}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {editId === item.id ? (
+                    <div onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setEditId(null); }}
+                      style={{ display: "flex", gap: 6 }}>
+                      {activeType === "ustock" ? (
+                        <>
+                          <input type="number" autoFocus defaultValue={item.shares} placeholder="股數"
+                            onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) updateItem(item.id, { shares: v }); }}
+                            style={{ ...quickInput, width: 70 }} />
+                          <input type="number" defaultValue={item.price} placeholder="價格"
+                            onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) updateItem(item.id, { price: v }); }}
+                            style={{ ...quickInput, width: 80 }} />
+                        </>
+                      ) : (
+                        <input type="number" autoFocus defaultValue={item.amount}
+                          onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) updateItem(item.id, { amount: v }); }}
+                          style={{ ...quickInput, width: 110 }} />
+                      )}
                     </div>
                   ) : (
-                    <input type="number" value={editVal} onChange={e => setEditVal(e.target.value)} placeholder="金額"
-                      style={{ ...inputStyle, border: `1px solid ${activeInfo.color}`, width: "100%", boxSizing: "border-box" }} />
-                  )}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => saveEdit(item.id)} style={{ flex: 1, background: activeInfo.color, color: "#fff", border: "none", borderRadius: 8, padding: "8px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>儲存</button>
-                    <button onClick={() => { setEditId(null); setEditVal(""); setEditName(""); setEditShares(""); setEditPrice(""); }}
-                      style={{ flex: 1, background: "#eee", color: "#666", border: "none", borderRadius: 8, padding: "8px", cursor: "pointer", fontSize: 14 }}>取消</button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 12, background: activeInfo.colorBg, display: "flex", alignItems: "center", justifyContent: "center", color: activeInfo.color, flexShrink: 0 }}>
-                      {activeInfo.icon}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.name}</div>
-                      <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>
-                        {activeType === "ustock" ? `${item.shares}股 × US$${item.price}` : item.note || (activeType === "foreign" ? item.currency : "台幣")}
-                        {activeType === "foreign" && ` · ${CURRENCY_LABELS[item.currency]}${item.amount.toLocaleString()}`}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ textAlign: "right", cursor: "pointer" }} onClick={() => {
-                      setEditId(item.id); setEditName(item.name);
-                      if (activeType === "ustock") { setEditShares(String(item.shares)); setEditPrice(String(item.price)); }
-                      else setEditVal(String(item.amount));
-                    }}>
+                    <div style={{ textAlign: "right", cursor: "pointer" }} onClick={() => setEditId(item.id)}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: activeInfo.color, fontFamily: "'Noto Sans TC', sans-serif" }}>{formatNT(twdVal)}</div>
-                      <div style={{ fontSize: 10, color: "#bbb", fontFamily: "'Noto Sans TC', sans-serif" }}>點擊編輯</div>
+                      <div style={{ fontSize: 10, color: "#bbb", fontFamily: "'Noto Sans TC', sans-serif" }}>點金額修改</div>
                     </div>
-                    <button onClick={() => removeItem(item.id)} style={{ border: "none", background: "#fde8e5", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
-                  </div>
+                  )}
+                  <button onClick={() => removeItem(item.id)} style={{ border: "none", background: "#fde8e5", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
@@ -619,7 +648,7 @@ function AssetsPage({ assets, setAssets }) {
                 {activeType === "foreign" && (
                   <select value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}
                     style={{ ...inputStyle, width: 80, padding: "10px 8px", border: "1px solid #ddd" }}>
-                    {Object.keys(CURRENCY_RATES).filter(c => c !== "TWD").map(c => <option key={c}>{c}</option>)}
+                    {Object.keys(DEFAULT_RATES).filter(c => c !== "TWD").map(c => <option key={c}>{c}</option>)}
                   </select>
                 )}
               </div>
@@ -632,8 +661,7 @@ function AssetsPage({ assets, setAssets }) {
       </Card>
     </div>
   );
-}
-function FoodPage({ food, setFood }) {
+}function FoodPage({ food, setFood }) {
   const monthly = calcFoodMonthly(food);
   const fields = [
     { label: "早餐", key: "weekdayB", section: "平日" },
@@ -715,7 +743,8 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
   const [activeTab, setActiveTab] = useState("expense");
   const [showAdd, setShowAdd] = useState(false);
   const currentYear = new Date().getFullYear();
-  const [form, setForm] = useState({ name: "", amount: "", category: "住", date: 25, month: new Date().getMonth()+1, day: 1, repeat: "loop", times: 3, year: currentYear });
+  const currentMonth = new Date().getMonth() + 1;
+  const [form, setForm] = useState({ name: "", amount: "", category: "住", date: 25, month: currentMonth, day: 1, repeat: "loop", times: 3, year: currentYear, firstAmount: "" });
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const addRef = useRef(null);
@@ -729,7 +758,7 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
   };
 
   const repeatLabel = (item) => {
-    if (item.repeat === "once") return `一次性 ${item.year || currentYear}年`;
+    if (item.repeat === "once") return "一次性";
     if (item.repeat === "fixed") return `共${item.times}個月`;
     return "每年循環";
   };
@@ -741,12 +770,21 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
       setExpenses(prev => [...prev, { ...base, category: form.category, color: catColors[form.category] || SAGE }]);
     } else if (activeTab === "income") {
       setIncome(prev => [...prev, { ...base, date: parseInt(form.date) || 25 }]);
-    } else if (activeTab === "onetime") {
-      setOneTime(prev => [...prev, { ...base, month: parseInt(form.month), day: parseInt(form.day), repeat: form.repeat, times: parseInt(form.times) || 3, year: parseInt(form.year) }]);
     } else {
-      setOneTimeIncome(prev => [...prev, { ...base, month: parseInt(form.month), day: parseInt(form.day), repeat: form.repeat, times: parseInt(form.times) || 3, year: parseInt(form.year) }]);
+      const isFixed = form.repeat === "fixed";
+      const record = {
+        ...base,
+        month: isFixed ? currentMonth : parseInt(form.month),
+        day: parseInt(form.day) || 1,
+        repeat: form.repeat,
+        times: parseInt(form.times) || 3,
+        year: isFixed ? currentYear : parseInt(form.year),
+        ...(isFixed && form.firstAmount ? { firstAmount: parseInt(form.firstAmount) } : {})
+      };
+      if (activeTab === "onetime") setOneTime(prev => [...prev, record]);
+      else setOneTimeIncome(prev => [...prev, record]);
     }
-    setForm({ name: "", amount: "", category: "住", date: 25, month: new Date().getMonth()+1, day: 1, repeat: "loop", times: 3, year: currentYear });
+    setForm({ name: "", amount: "", category: "住", date: 25, month: currentMonth, day: 1, repeat: "loop", times: 3, year: currentYear, firstAmount: "" });
     setShowAdd(false);
   };
 
@@ -773,11 +811,11 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
 
   const EditRow = ({ item, type }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 0" }}>
-      <input value={editForm.name || ""} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+      <input defaultValue={editForm.name || ""} onBlur={e => setEditForm(p => ({ ...p, name: e.target.value }))}
         style={{ ...inputStyle, border: `1px solid ${SAGE}` }} placeholder="名稱" />
       <div style={{ display: "flex", gap: 8 }}>
-        <input type="number" value={editForm.amount || ""} onChange={e => setEditForm(p => ({ ...p, amount: parseInt(e.target.value) }))}
-          style={{ ...inputStyle, flex: 1, border: `1px solid ${SAGE}` }} placeholder="金額" />
+        <input type="number" defaultValue={editForm.amount || ""} onBlur={e => setEditForm(p => ({ ...p, amount: parseInt(e.target.value) || 0 }))}
+          style={{ ...inputStyle, flex: 1, minWidth: 0, border: `1px solid ${SAGE}` }} placeholder="金額" />
         <button onClick={() => saveEdit(type)} style={{ background: SAGE, color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>儲存</button>
         <button onClick={() => { setEditId(null); setEditForm({}); }} style={{ background: "#eee", color: "#666", border: "none", borderRadius: 8, padding: "8px 12px", cursor: "pointer", fontSize: 14 }}>取消</button>
       </div>
@@ -812,6 +850,57 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
       </div>
 
       <Card style={{ padding: "14px 16px" }}>
+        <button onClick={handleShowAdd} style={{ width: "100%", marginTop: 12, padding: "12px", border: `2px dashed ${SAGE}44`, borderRadius: 14, background: "none", cursor: "pointer", color: SAGE, fontSize: 14, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif" }}>
+          + 新增{activeTab === "expense" ? "支出" : activeTab === "income" ? "收入" : activeTab === "onetime" ? "特定支出" : "特定收入"}項目
+        </button>
+
+        {showAdd && (
+          <div ref={addRef} style={{ marginTop: 12, padding: 14, background: BG, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            <input type="text" placeholder="項目名稱" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} style={{ ...inputStyle }} />
+            <input type="number" placeholder="金額 (NT$)" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} style={{ ...inputStyle }} />
+            {activeTab === "expense" && (
+              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} style={{ ...inputStyle }}>
+                {categories.map(c => <option key={c}>{c}</option>)}
+              </select>
+            )}
+            {activeTab === "income" && (
+              <input type="number" placeholder="入帳日 (幾號)" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} style={{ ...inputStyle }} />
+            )}
+            {(activeTab === "onetime" || activeTab === "onetimeincome") && (
+              <>
+                <select value={form.repeat} onChange={e => setForm(p => ({ ...p, repeat: e.target.value }))} style={{ ...inputStyle }}>
+                  <option value="loop">每年循環</option>
+                  <option value="once">一次性（用完消失）</option>
+                  <option value="fixed">固定期數（本月開始）</option>
+                </select>
+                {form.repeat === "fixed" ? (
+                  <>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>{currentYear}年{currentMonth}月起，共</span>
+                      <input type="number" min={1} placeholder="幾個月" value={form.times} onChange={e => setForm(p => ({ ...p, times: e.target.value }))} style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+                      <span style={{ fontSize: 13, color: "#888", fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>個月</span>
+                    </div>
+                    <input type="number" placeholder="首期金額（與每期不同時才填）" value={form.firstAmount} onChange={e => setForm(p => ({ ...p, firstAmount: e.target.value }))} style={{ ...inputStyle }} />
+                  </>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <select value={form.month} onChange={e => setForm(p => ({ ...p, month: e.target.value }))} style={{ ...inputStyle, flex: 1 }}>
+                      {MONTHS.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
+                    </select>
+                    <input type="number" min={1} max={31} placeholder="幾號" value={form.day} onChange={e => setForm(p => ({ ...p, day: e.target.value }))} style={{ ...inputStyle, width: 70 }} />
+                  </div>
+                )}
+                {form.repeat === "once" && (
+                  <select value={form.year} onChange={e => setForm(p => ({ ...p, year: parseInt(e.target.value) }))} style={{ ...inputStyle }}>
+                    {[currentYear, currentYear+1, currentYear+2].map(y => <option key={y} value={y}>{y}年</option>)}
+                  </select>
+                )}
+              </>
+            )}
+            <button onClick={addItem} style={{ background: SAGE, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
+          </div>
+        )}
+
         {activeTab === "expense" && expenses.map(item => (
           <div key={item.id} style={{ borderBottom: "1px solid #f0ede8" }}>
             {editId === item.id + "_expense" ? <EditRow item={item} type="expense" /> : (
@@ -868,94 +957,72 @@ function ExpensePage({ expenses, setExpenses, income, setIncome, oneTime, setOne
                 </div>
               </div>
             )}
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
-              const items = (activeTab === "onetime" ? oneTime : oneTimeIncome).filter(o => o.month === m);
-              if (items.length === 0) return null;
+            {(() => {
+              const now = new Date();
+              const baseY = now.getFullYear();
+              const baseM = now.getMonth() + 1;
+              const list = activeTab === "onetime" ? oneTime : oneTimeIncome;
               const isIncome = activeTab === "onetimeincome";
-              return (
-                <div key={m}>
-                  <div style={{ fontSize: 12, color: isIncome ? SAGE : RED, fontWeight: 700, padding: "8px 0 4px", fontFamily: "'Noto Sans TC', sans-serif" }}>{MONTHS[m-1]}</div>
-                  {items.map(item => (
-                    <div key={item.id} style={{ borderBottom: "1px solid #f0ede8" }}>
-                      {editId === item.id + "_" + activeTab ? <EditRow item={item} type={activeTab} /> : (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                            <div style={{ width: 38, height: 38, borderRadius: 12, background: isIncome ? "#e8f0e5" : "#fde8e5", display: "flex", alignItems: "center", justifyContent: "center", color: isIncome ? SAGE : RED, flexShrink: 0 }}>
-                              {isIncome ? <CalendarPlus size={18} /> : <CalendarMinus size={18} />}
+              return Array.from({ length: 12 }, (_, i) => {
+                const mTotal = (baseM - 1) + i;
+                const calMonth = (mTotal % 12) + 1;
+                const year = baseY + Math.floor(mTotal / 12);
+                const entries = [];
+                list.forEach(item => {
+                  if (!shouldAppear(item, calMonth, year)) return;
+                  let sub = "";
+                  let amt = item.amount;
+                  if (item.repeat === "fixed") {
+                    const startY = item.year || baseY;
+                    const idx = (year - startY) * 12 + (calMonth - item.month) + 1;
+                    sub = `第${idx}期/共${item.times}期`;
+                    if (idx === 1 && item.firstAmount) amt = item.firstAmount;
+                  } else if (item.repeat === "once") {
+                    sub = "一次性";
+                  } else {
+                    sub = "每年循環";
+                  }
+                  entries.push({ item, sub, amt });
+                });
+                if (entries.length === 0) return null;
+                const label = year === baseY ? MONTHS[calMonth-1] : `${year}年${calMonth}月`;
+                return (
+                  <div key={year + "-" + calMonth}>
+                    <div style={{ fontSize: 12, color: isIncome ? SAGE : RED, fontWeight: 700, padding: "8px 0 4px", fontFamily: "'Noto Sans TC', sans-serif" }}>{label}</div>
+                    {entries.map(({ item, sub, amt }) => (
+                      <div key={item.id + "-" + year + "-" + calMonth} style={{ borderBottom: "1px solid #f0ede8" }}>
+                        {editId === item.id + "_" + activeTab ? <EditRow item={item} type={activeTab} /> : (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                              <div style={{ width: 38, height: 38, borderRadius: 12, background: isIncome ? "#e8f0e5" : "#fde8e5", display: "flex", alignItems: "center", justifyContent: "center", color: isIncome ? SAGE : RED, flexShrink: 0 }}>
+                                {isIncome ? <CalendarPlus size={18} /> : <CalendarMinus size={18} />}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.name}</div>
+                                <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>{calMonth}月{item.day}日 · {sub}</div>
+                              </div>
                             </div>
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{item.name}</div>
-                              <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>{m}月{item.day}日 · {repeatLabel(item)}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span onClick={() => startEdit(item, activeTab)} style={{ fontSize: 15, fontWeight: 700, color: isIncome ? SAGE : RED, fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>
+                                {isIncome ? "+" : "-"}{formatNT(amt)}
+                              </span>
+                              <button onClick={() => isIncome ? removeOneTimeIncome(item.id) : removeOneTime(item.id)} style={{ border: "none", background: "#fde8e5", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                             </div>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span onClick={() => startEdit(item, activeTab)} style={{ fontSize: 15, fontWeight: 700, color: isIncome ? SAGE : RED, fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer" }}>
-                              {isIncome ? "+" : "-"}{formatNT(item.amount)}
-                            </span>
-                            <button onClick={() => isIncome ? removeOneTimeIncome(item.id) : removeOneTime(item.id)} style={{ border: "none", background: "#fde8e5", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: RED, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              });
+            })()}
           </>
         )}
 
-        <button onClick={handleShowAdd} style={{ width: "100%", marginTop: 12, padding: "12px", border: `2px dashed ${SAGE}44`, borderRadius: 14, background: "none", cursor: "pointer", color: SAGE, fontSize: 14, fontWeight: 600, fontFamily: "'Noto Sans TC', sans-serif" }}>
-          + 新增{activeTab === "expense" ? "支出" : activeTab === "income" ? "收入" : activeTab === "onetime" ? "特定支出" : "特定收入"}項目
-        </button>
-
-        {showAdd && (
-          <div ref={addRef} style={{ marginTop: 12, padding: 14, background: BG, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-            <input type="text" placeholder="項目名稱" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} style={{ ...inputStyle }} />
-            <input type="number" placeholder="金額 (NT$)" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} style={{ ...inputStyle }} />
-            {activeTab === "expense" && (
-              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} style={{ ...inputStyle }}>
-                {categories.map(c => <option key={c}>{c}</option>)}
-              </select>
-            )}
-            {activeTab === "income" && (
-              <input type="number" placeholder="入帳日 (幾號)" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} style={{ ...inputStyle }} />
-            )}
-            {(activeTab === "onetime" || activeTab === "onetimeincome") && (
-              <>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <select value={form.month} onChange={e => setForm(p => ({ ...p, month: e.target.value }))} style={{ ...inputStyle, flex: 1 }}>
-                    {MONTHS.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
-                  </select>
-                  <input type="number" min={1} max={31} placeholder="幾號" value={form.day} onChange={e => setForm(p => ({ ...p, day: e.target.value }))} style={{ ...inputStyle, width: 70 }} />
-                </div>
-                <select value={form.repeat} onChange={e => setForm(p => ({ ...p, repeat: e.target.value }))} style={{ ...inputStyle }}>
-                  <option value="loop">每年循環</option>
-                  <option value="once">一次性（用完消失）</option>
-                  <option value="fixed">固定期數（幾個月）</option>
-                </select>
-                {form.repeat === "once" && (
-                  <select value={form.year} onChange={e => setForm(p => ({ ...p, year: parseInt(e.target.value) }))} style={{ ...inputStyle }}>
-                    {[currentYear, currentYear+1, currentYear+2].map(y => <option key={y} value={y}>{y}年</option>)}
-                  </select>
-                )}
-                {form.repeat === "fixed" && (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <select value={form.year} onChange={e => setForm(p => ({ ...p, year: parseInt(e.target.value) }))} style={{ ...inputStyle, flex: 1 }}>
-                      {[currentYear, currentYear+1, currentYear+2].map(y => <option key={y} value={y}>{y}年開始</option>)}
-                    </select>
-                    <input type="number" min={1} placeholder="共幾個月" value={form.times} onChange={e => setForm(p => ({ ...p, times: e.target.value }))} style={{ ...inputStyle, width: 90 }} />
-                  </div>
-                )}
-              </>
-            )}
-            <button onClick={addItem} style={{ background: SAGE, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans TC', sans-serif" }}>確認新增</button>
-          </div>
-        )}
       </Card>
     </div>
   );
-}
-function GoalCard({ startAssets, netMonthly }) {
+}function GoalCard({ startAssets, netMonthly, forecast }) {
   const [goal, setGoal] = useState(() => loadData("savingsGoal", 500000));
   const [editing, setEditing] = useState(false);
 
@@ -963,12 +1030,18 @@ function GoalCard({ startAssets, netMonthly }) {
 
   const pct = Math.min(100, Math.round((startAssets / goal) * 100));
   const diff = Math.max(0, goal - startAssets);
-  const monthsLeft = netMonthly > 0 ? Math.ceil(diff / netMonthly) : null;
-  const reachDate = monthsLeft ? (() => {
+
+  const reachDate = (() => {
+    if (forecast) {
+      const hit = forecast.find(f => f.assets >= goal);
+      if (hit) return hit.year + "/" + hit.calMonth;
+    }
+    if (netMonthly <= 0) return null;
+    const monthsLeft = Math.ceil(diff / netMonthly);
     const d = new Date();
     d.setMonth(d.getMonth() + monthsLeft);
-    return d.getFullYear() + "/" + (d.getMonth()+1);
-  })() : null;
+    return d.getFullYear() + "/" + (d.getMonth() + 1) + "（估）";
+  })();
 
   return (
     <Card>
@@ -1001,8 +1074,8 @@ function GoalCard({ startAssets, netMonthly }) {
   );
 }
 
-function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }) {
-  const totalTWD = calcTotal(assets);
+function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food, rates }) {
+  const totalTWD = calcTotal(assets, rates);
   const [payday, setPayday] = useState(() => loadData("payday", 25));
   const [startAssets, setStartAssets] = useState(Math.round(totalTWD));
 
@@ -1013,32 +1086,70 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }
   const totalIncome  = income.reduce((s, i) => s + i.amount, 0);
   const netMonthly   = totalIncome - totalExpense;
 
-  const today = new Date();
-  const startYear  = today.getFullYear();
-  const startMonth = today.getMonth();
-
   const forecast = useMemo(() => {
+    const today = new Date();
+    const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const isPastPayday = today.getDate() > payday;
+
+    let firstM = today.getMonth();
+    let firstY = today.getFullYear();
+    if (isPastPayday) {
+      firstM += 1;
+      if (firstM > 11) { firstM = 0; firstY += 1; }
+    }
+    const firstPaydayDate = new Date(firstY, firstM, payday);
+    const daysToFirst = Math.max(0, Math.round((firstPaydayDate - todayMid) / 86400000));
+
     let runningAssets = startAssets;
+    const notYetHappened = (o, calMonth, year) => {
+      const d = new Date(year, calMonth - 1, o.day || 1);
+      return d >= todayMid;
+    };
     return Array.from({ length: 12 }, (_, i) => {
-      const calMonth = ((startMonth + i) % 12) + 1;
-      const year     = startYear + Math.floor((startMonth + i) / 12);
+      const mTotal = firstM + i;
+      const calMonth = (mTotal % 12) + 1;
+      const year = firstY + Math.floor(mTotal / 12);
       const monthIndex = calMonth - 1;
-      runningAssets += netMonthly;
-      const oneTimeItems       = oneTime.filter(o => shouldAppear(o, calMonth, year));
-      const oneTimeDeduct      = oneTimeItems.reduce((s, o) => s + o.amount, 0);
-      const oneTimeIncomeItems = oneTimeIncome.filter(o => shouldAppear(o, calMonth, year));
-      const oneTimeIncomeAdd   = oneTimeIncomeItems.reduce((s, o) => s + o.amount, 0);
+
+      if (i === 0) {
+        runningAssets += (netMonthly / 30) * daysToFirst;
+      } else {
+        runningAssets += netMonthly;
+      }
+
+      let oneTimeItems       = oneTime.filter(o => shouldAppear(o, calMonth, year));
+      let oneTimeIncomeItems = oneTimeIncome.filter(o => shouldAppear(o, calMonth, year));
+
+      if (i === 0) {
+        oneTimeItems       = oneTimeItems.filter(o => notYetHappened(o, calMonth, year));
+        oneTimeIncomeItems = oneTimeIncomeItems.filter(o => notYetHappened(o, calMonth, year));
+        if (isPastPayday) {
+          const prevM = today.getMonth() + 1;
+          const prevY = today.getFullYear();
+          const extraExp = oneTime.filter(o => shouldAppear(o, prevM, prevY) && notYetHappened(o, prevM, prevY));
+          const extraInc = oneTimeIncome.filter(o => shouldAppear(o, prevM, prevY) && notYetHappened(o, prevM, prevY));
+          oneTimeItems = [...extraExp, ...oneTimeItems];
+          oneTimeIncomeItems = [...extraInc, ...oneTimeIncomeItems];
+        }
+      }
+
+      const oneTimeDeduct    = oneTimeItems.reduce((s, o) => s + amountFor(o, calMonth, year), 0);
+      const oneTimeIncomeAdd = oneTimeIncomeItems.reduce((s, o) => s + amountFor(o, calMonth, year), 0);
       runningAssets -= oneTimeDeduct;
       runningAssets += oneTimeIncomeAdd;
+
       return {
         month: MONTHS[monthIndex], calMonth, year,
-        assets: Math.max(0, runningAssets),
+        assets: Math.max(0, Math.round(runningAssets)),
         paydayDate: `${year}/${calMonth}/${payday}`,
-        net: netMonthly, oneTimeDeduct, oneTimeItems,
-        oneTimeIncomeItems, oneTimeIncomeAdd,
+        net: netMonthly,
+        isPartial: i === 0,
+        partialDays: daysToFirst,
+        oneTimeItems: oneTimeItems.map(o => ({ ...o, amount: amountFor(o, calMonth, year) })),
+        oneTimeIncomeItems: oneTimeIncomeItems.map(o => ({ ...o, amount: amountFor(o, calMonth, year) })),
       };
     });
-  }, [startAssets, netMonthly, payday, startMonth, startYear, oneTime, oneTimeIncome]);
+  }, [startAssets, netMonthly, payday, oneTime, oneTimeIncome]);
 
   const inputStyle = { padding: "6px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 16, color: "#333", background: "#fff", fontFamily: "'Noto Sans TC', sans-serif", outline: "none" };
 
@@ -1049,12 +1160,12 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "#666", fontFamily: "'Noto Sans TC', sans-serif" }}>起始總資產</span>
-            <input type="number" value={startAssets} onChange={e => setStartAssets(parseInt(e.target.value) || 0)}
+            <input type="number" defaultValue={startAssets} onBlur={e => setStartAssets(parseInt(e.target.value) || 0)}
               style={{ ...inputStyle, width: 130, textAlign: "right" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "#666", fontFamily: "'Noto Sans TC', sans-serif" }}>發薪日（每月幾號）</span>
-            <input type="number" min={1} max={31} value={payday} onChange={e => setPayday(parseInt(e.target.value) || 25)}
+            <input type="number" min={1} max={31} defaultValue={payday} onBlur={e => setPayday(parseInt(e.target.value) || 25)}
               style={{ ...inputStyle, width: 80, textAlign: "center" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: netMonthly >= 0 ? "#e8f0e5" : "#fde8e5", borderRadius: 12 }}>
@@ -1066,7 +1177,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }
         </div>
       </Card>
 
-      <GoalCard startAssets={startAssets} netMonthly={netMonthly} />
+      <GoalCard startAssets={startAssets} netMonthly={netMonthly} forecast={forecast} />
 
       <Card style={{ padding: "14px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
@@ -1080,7 +1191,9 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food }
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: i === 0 ? SAGE : `${SAGE}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : SAGE, fontFamily: "'Noto Sans TC', sans-serif", flexShrink: 0 }}>{f.month}</div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#333", fontFamily: "'Noto Sans TC', sans-serif" }}>{f.paydayDate}</div>
-                  <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>{f.net >= 0 ? "+" : ""}{formatNT(f.net)} / 月</div>
+                  <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'Noto Sans TC', sans-serif" }}>
+                    {f.isPartial ? `依剩餘 ${f.partialDays} 天估算` : `${f.net >= 0 ? "+" : ""}${formatNT(f.net)} / 月`}
+                  </div>
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -1106,6 +1219,7 @@ export default function App() {
   const [oneTimeIncome, setOneTimeIncome] = useState(() => loadData("onetimeincome", DEFAULT_ONETIME_INCOME));
   const [snapshots, setSnapshots]         = useState(() => loadData("snapshots", DEFAULT_SNAPSHOTS));
   const [food, setFood]                   = useState(() => loadData("food", DEFAULT_FOOD));
+  const [rates, setRates]                 = useState(() => loadData("currencyRates", DEFAULT_RATES));
 
   useEffect(() => { saveData("assets", assets); }, [assets]);
   useEffect(() => { saveData("expenses", expenses); }, [expenses]);
@@ -1114,23 +1228,50 @@ export default function App() {
   useEffect(() => { saveData("onetimeincome", oneTimeIncome); }, [oneTimeIncome]);
   useEffect(() => { saveData("snapshots", snapshots); }, [snapshots]);
   useEffect(() => { saveData("food", food); }, [food]);
+  useEffect(() => { saveData("currencyRates", rates); }, [rates]);
+
+  useEffect(() => {
+    const now = new Date();
+    const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const isExpired = (item) => {
+      if (item.repeat !== "once") return false;
+      const y = item.year || now.getFullYear();
+      return new Date(y, item.month - 1, item.day || 1) < todayMid;
+    };
+    setOneTime(prev => {
+      const filtered = prev.filter(o => !isExpired(o));
+      return filtered.length !== prev.length ? filtered : prev;
+    });
+    setOneTimeIncome(prev => {
+      const filtered = prev.filter(o => !isExpired(o));
+      return filtered.length !== prev.length ? filtered : prev;
+    });
+  }, []);
+
+  useEffect(() => {
+    const fix = (e) => {
+      const next = e.relatedTarget;
+      if (next && (next.tagName === 'INPUT' || next.tagName === 'SELECT' || next.tagName === 'TEXTAREA')) return;
+      setTimeout(() => { window.scrollTo(0, 0); }, 150);
+    };
+    document.addEventListener('focusout', fix);
+    document.addEventListener('touchend', (e) => {
+      if (e.target.tagName === 'SELECT') setTimeout(() => window.scrollTo(0, 0), 300);
+    });
+    return () => document.removeEventListener('focusout', fix);
+  }, []);
 
   const handleSaveSnapshot = () => {
-    const total = calcTotal(assets);
+    const total = calcTotal(assets, rates);
     setSnapshots(prev => [...prev, { ts: Date.now(), date: todayStr(), total }]);
   };
 
   const handleExport = () => {
     const data = {
-      assets: loadData("assets", DEFAULT_ASSETS),
-      expenses: loadData("expenses", DEFAULT_EXPENSES),
-      income: loadData("income", DEFAULT_INCOME),
-      oneTime: loadData("onetime", DEFAULT_ONETIME),
-      oneTimeIncome: loadData("onetimeincome", DEFAULT_ONETIME_INCOME),
-      snapshots: loadData("snapshots", DEFAULT_SNAPSHOTS),
-      food: loadData("food", DEFAULT_FOOD),
+      assets, expenses, income, oneTime, oneTimeIncome, snapshots, food,
       payday: loadData("payday", 25),
       savingsGoal: loadData("savingsGoal", 500000),
+      currencyRates: rates,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1157,6 +1298,7 @@ export default function App() {
         if (data.food) { saveData("food", data.food); setFood(data.food); }
         if (data.payday) saveData("payday", data.payday);
         if (data.savingsGoal) saveData("savingsGoal", data.savingsGoal);
+        if (data.currencyRates) { saveData("currencyRates", data.currencyRates); setRates(data.currencyRates); }
         alert("匯入成功！");
       } catch { alert("檔案格式錯誤"); }
     };
@@ -1180,11 +1322,11 @@ export default function App() {
   ];
 
   const pages = [
-    <OverviewPage expenses={expenses} income={income} assets={assets} snapshots={snapshots} onSaveSnapshot={handleSaveSnapshot} oneTimeIncome={oneTimeIncome} oneTime={oneTime} food={food} />,
-    <AssetsPage assets={assets} setAssets={setAssets} />,
+    <OverviewPage expenses={expenses} income={income} assets={assets} snapshots={snapshots} onSaveSnapshot={handleSaveSnapshot} oneTimeIncome={oneTimeIncome} oneTime={oneTime} food={food} rates={rates} />,
+    <AssetsPage assets={assets} setAssets={setAssets} rates={rates} setRates={setRates} />,
     <FoodPage food={food} setFood={setFood} />,
     <ExpensePage expenses={expenses} setExpenses={setExpenses} income={income} setIncome={setIncome} oneTime={oneTime} setOneTime={setOneTime} oneTimeIncome={oneTimeIncome} setOneTimeIncome={setOneTimeIncome} />,
-    <ForecastPage expenses={expenses} income={income} assets={assets} oneTime={oneTime} oneTimeIncome={oneTimeIncome} food={food} />,
+    <ForecastPage expenses={expenses} income={income} assets={assets} oneTime={oneTime} oneTimeIncome={oneTimeIncome} food={food} rates={rates} />,
   ];
 
   return (
@@ -1222,7 +1364,7 @@ export default function App() {
         ))}
       </SwipeContainer>
 
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", borderTop: "1px solid #e8e5df", display: "flex", padding: "6px 0 20px", flexShrink: 0 }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", borderTop: "1px solid #e8e5df", display: "flex", padding: "6px 0 34px", flexShrink: 0 }}>
         {navItems.map((item, i) => (
           <NavItem key={i} icon={item.icon} label={item.label} active={pageIndex === i} onClick={() => setPageIndex(i)} />
         ))}
