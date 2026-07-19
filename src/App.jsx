@@ -190,6 +190,7 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
   const isDraggingRef = useRef(false);
   const isHorizontalRef = useRef(null);
   const pageIndexRef = useRef(pageIndex);
+  const velRef = useRef({ x: 0, t: 0, v: 0 });
 
   useEffect(() => { pageIndexRef.current = pageIndex; }, [pageIndex]);
 
@@ -212,6 +213,7 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
       isDraggingRef.current = true;
       isHorizontalRef.current = null;
       currentXRef.current = 0;
+      velRef.current = { x: e.touches[0].clientX, t: e.timeStamp, v: 0 };
       const idx = pageIndexRef.current;
       setTranslate(-idx * WIDTH, false);
     };
@@ -230,9 +232,15 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
         const idx = pageIndexRef.current;
         const base = -idx * WIDTH;
         let x = base + dx;
-        if (idx === 0 && dx > 0) x = base + dx * 0.15;
-        if (idx === PAGES.length - 1 && dx < 0) x = base + dx * 0.15;
+        const rubber = (d) => d / (1 + Math.abs(d) / WIDTH * 2.5);
+        if (idx === 0 && dx > 0) x = base + rubber(dx);
+        if (idx === PAGES.length - 1 && dx < 0) x = base + rubber(dx);
         currentXRef.current = dx;
+        const now = e.timeStamp;
+        const dt = now - velRef.current.t;
+        if (dt > 0) velRef.current.v = (e.touches[0].clientX - velRef.current.x) / dt;
+        velRef.current.x = e.touches[0].clientX;
+        velRef.current.t = now;
         setTranslate(x, false);
       }
     };
@@ -242,11 +250,19 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
       if (!isHorizontalRef.current) return;
       const dx = currentXRef.current;
       const idx = pageIndexRef.current;
+      const v = velRef.current.v;
       let newIndex = idx;
-      if (dx < -THRESHOLD && idx < PAGES.length - 1) newIndex = idx + 1;
+      if (v < -0.3 && idx < PAGES.length - 1) newIndex = idx + 1;
+      else if (v > 0.3 && idx > 0) newIndex = idx - 1;
+      else if (dx < -THRESHOLD && idx < PAGES.length - 1) newIndex = idx + 1;
       else if (dx > THRESHOLD && idx > 0) newIndex = idx - 1;
+      const remain = Math.abs((-newIndex * WIDTH) - (-idx * WIDTH + dx));
+      const dur = Math.max(180, Math.min(350, remain / Math.max(Math.abs(v), 0.5)));
+      if (containerRef.current) {
+        containerRef.current.style.transition = `transform ${Math.round(dur)}ms ${SPRING}`;
+        containerRef.current.style.transform = `translateX(${-newIndex * WIDTH}px)`;
+      }
       setPageIndex(newIndex);
-      setTranslate(-newIndex * WIDTH, true);
     };
     el.addEventListener('touchstart', handleTouchStart, { passive: true });
     el.addEventListener('touchmove', handleTouchMove, { passive: false });
