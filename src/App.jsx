@@ -1418,13 +1418,13 @@ export default function App() {
 
       <SwipeContainer pageIndex={pageIndex} setPageIndex={setPageIndex}>
         {pages.map((page, i) => (
-          <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 120px", flexShrink: 0 }}>
+          <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 140px", flexShrink: 0 }}>
             {page}
           </div>
         ))}
       </SwipeContainer>
 
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--nav-bg)", backdropFilter: "blur(12px)", borderTop: "1px solid var(--tabbg)", display: "flex", padding: "6px 0 34px", flexShrink: 0 }}>
+      <div style={{ position: "fixed", bottom: 20, left: 16, right: 16, background: "var(--nav-bg)", backdropFilter: "blur(16px)", border: "var(--card-border)", borderTop: "var(--card-top)", borderRadius: 99, display: "flex", padding: "4px 6px", flexShrink: 0, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}>
         {navItems.map((item, i) => (
           <NavItem key={i} icon={item.icon} label={item.label} active={pageIndex === i} onClick={() => setPageIndex(i)} />
         ))}
