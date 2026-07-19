@@ -194,9 +194,8 @@ function PageGlow({ idx }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
       {PAGE_GLOWS[idx].map((g, i) => (
         <div key={i} style={{
-          position: "absolute", width: 300, height: 300, borderRadius: "50%",
-          background: g.gold ? "var(--glow-b)" : "var(--glow-a)",
-          filter: "blur(70px)",
+          position: "absolute", width: 460, height: 460, borderRadius: "50%",
+          background: `radial-gradient(circle closest-side, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 0%, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 25%, transparent 100%)`,
           ...g, gold: undefined,
         }} />
       ))}
