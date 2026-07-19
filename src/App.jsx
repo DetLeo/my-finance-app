@@ -4,7 +4,7 @@ import {
   Landmark, BarChart2, DollarSign, ArrowLeftRight,
   ArrowDownCircle, ArrowUpCircle, CalendarMinus, CalendarPlus,
   Camera, ClipboardList, Save, ChevronRight,
-  Sun, Palmtree, Settings, Upload, Download, Lightbulb, X
+  Sun, Palmtree, Settings, Upload, Download, Lightbulb, X, Image as ImageIcon
 } from "lucide-react";
 
 const SAGE = "var(--sage)";
@@ -299,7 +299,7 @@ function SwipeContainer({ pageIndex, setPageIndex, children }) {
   useEffect(() => { setTranslate(-pageIndex * WIDTH, true); }, [pageIndex]);
 
   return (
-    <div ref={wrapperRef} style={{ overflow: "hidden", flex: 1, position: "relative" }}>
+    <div ref={wrapperRef} style={{ overflow: "hidden", flex: 1, position: "relative", zIndex: 1 }}>
       <div ref={containerRef} style={{
         display: "flex", width: `${PAGES.length * 100}%`, height: "100%",
         transform: `translateX(-${pageIndex * WIDTH}px)`, willChange: "transform",
@@ -1305,6 +1305,41 @@ export default function App() {
     if (theme === "sage") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  const [bgImage, setBgImage] = useState(null);
+  const idbOpen = (mode, fn) => {
+    const rq = indexedDB.open("finance-bg", 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore("bg");
+    rq.onsuccess = () => fn(rq.result.transaction("bg", mode).objectStore("bg"));
+  };
+  useEffect(() => {
+    idbOpen("readonly", store => {
+      const g = store.get("img");
+      g.onsuccess = () => { if (g.result) setBgImage(g.result); };
+    });
+  }, []);
+  const handleBgPick = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const img = new window.Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.width * scale);
+      cv.height = Math.round(img.height * scale);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      const dataUrl = cv.toDataURL("image/jpeg", 0.82);
+      idbOpen("readwrite", store => store.put(dataUrl, "img"));
+      setBgImage(dataUrl);
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+    e.target.value = "";
+  };
+  const handleBgRemove = () => {
+    idbOpen("readwrite", store => store.delete("img"));
+    setBgImage(null);
+  };
   const [assets, setAssets]               = useState(() => loadData("assets", DEFAULT_ASSETS));
   const [expenses, setExpenses]           = useState(() => loadData("expenses", DEFAULT_EXPENSES));
   const [income, setIncome]               = useState(() => loadData("income", DEFAULT_INCOME));
@@ -1434,7 +1469,7 @@ export default function App() {
 
   return (
     <div style={{ width: "100%", boxSizing: "border-box", height: "100vh", background: BG, display: "flex", flexDirection: "column", fontFamily: "'Noto Sans TC', sans-serif", overflowX: "hidden" }}>
-      <div style={{ padding: "52px 20px 8px", flexShrink: 0, position: "relative" }}>
+      <div style={{ padding: "52px 20px 8px", flexShrink: 0, position: "relative", zIndex: 2 }}>
         <div style={{ fontSize: 13, color: "var(--sub)", marginBottom: 2 }}>
           {new Date().toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}
         </div>
@@ -1464,6 +1499,19 @@ export default function App() {
               ))}
             </div>
             <div style={{ height: 1, background: "var(--line)", margin: "0 12px" }} />
+            <div style={{ padding: "10px 16px 4px", fontSize: 11, color: "var(--sub2)", fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 700 }}>背景</div>
+            <label style={{ width: "100%", padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text)", fontFamily: "'Noto Sans TC', sans-serif", cursor: "pointer", boxSizing: "border-box" }}>
+              <ImageIcon size={16} color={SAGE} />
+              自訂背景圖
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { handleBgPick(e); setShowBackup(false); }} />
+            </label>
+            {bgImage && (
+              <button onClick={() => { handleBgRemove(); setShowBackup(false); }} style={{ width: "100%", padding: "12px 16px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--red)", fontFamily: "'Noto Sans TC', sans-serif" }}>
+                <X size={16} color={RED} />
+                移除背景圖
+              </button>
+            )}
+            <div style={{ height: 1, background: "var(--line)", margin: "0 12px" }} />
             <div style={{ padding: "10px 16px 4px", fontSize: 11, color: "var(--sub2)", fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 700 }}>備份</div>
             <button onClick={() => { handleExport(); setShowBackup(false); }} style={{ width: "100%", padding: "12px 16px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text)", fontFamily: "'Noto Sans TC', sans-serif" }}>
               <Upload size={16} color={SAGE} />
@@ -1479,10 +1527,16 @@ export default function App() {
         )}
       </div>
 
+      {bgImage && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}>
+          <img src={bgImage} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ position: "absolute", inset: 0, background: "var(--bg)", opacity: 0.86 }} />
+        </div>
+      )}
       <SwipeContainer pageIndex={pageIndex} setPageIndex={setPageIndex}>
         {pages.map((page, i) => (
           <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 140px", flexShrink: 0, position: "relative" }}>
-            <PageGlow idx={i} />
+            {!bgImage && <PageGlow idx={i} />}
             <div style={{ position: "relative", zIndex: 1 }}>{page}</div>
           </div>
         ))}
