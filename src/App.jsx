@@ -1542,7 +1542,7 @@ export default function App() {
         ))}
       </SwipeContainer>
 
-      <div ref={navRef} onTouchStart={navTouchStart} onTouchMove={navTouchMove} onTouchEnd={navTouchEnd} style={{ position: "fixed", bottom: 20, left: 16, right: 16, background: "var(--nav-bg)", touchAction: "none", backdropFilter: "blur(16px)", border: "var(--card-border)", borderTop: "var(--card-top)", borderRadius: 99, display: "flex", padding: "4px 6px", flexShrink: 0, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}>
+      <div ref={navRef} onTouchStart={navTouchStart} onTouchMove={navTouchMove} onTouchEnd={navTouchEnd} style={{ position: "fixed", bottom: 20, left: 16, right: 16, zIndex: 10, background: "var(--nav-bg)", touchAction: "none", backdropFilter: "blur(16px)", border: "var(--card-border)", borderTop: "var(--card-top)", borderRadius: 99, display: "flex", padding: "4px 6px", flexShrink: 0, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}>
         {navItems.map((item, i) => (
           <NavItem key={i} icon={item.icon} label={item.label} active={(previewIdx !== null ? previewIdx : pageIndex) === i} onClick={() => setPageIndex(i)} />
         ))}
