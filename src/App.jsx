@@ -1530,7 +1530,7 @@ export default function App() {
       {bgImage && (
         <div style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}>
           <img src={bgImage} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          <div style={{ position: "absolute", inset: 0, background: "var(--bg)", opacity: 0.86 }} />
+          <div style={{ position: "absolute", inset: 0, background: "var(--bg)", opacity: 0.74 }} />
         </div>
       )}
       <SwipeContainer pageIndex={pageIndex} setPageIndex={setPageIndex}>
