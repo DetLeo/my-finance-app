@@ -303,7 +303,13 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
   const lastSnap = prevSnaps.length > 0 ? prevSnaps[prevSnaps.length - 1] : null;
   const onlyToday = !lastSnap && snapshots.length > 0;
   const diff = lastSnap ? totalTWD - lastSnap.total : null;
-  const daysSince = lastSnap ? Math.max(1, Math.round((Date.now() - lastSnap.ts) / 86400000)) : null;
+  const daysSince = lastSnap ? (() => {
+    const [y, m, d] = lastSnap.date.split("/").map(Number);
+    const then = new Date(y, m - 1, d);
+    const now = new Date();
+    const nowMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.max(1, Math.round((nowMid - then) / 86400000));
+  })() : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1319,7 +1325,7 @@ export default function App() {
         if (data.income) { saveData("income", data.income); setIncome(data.income); }
         if (data.oneTime) { saveData("onetime", data.oneTime); setOneTime(data.oneTime); }
         if (data.oneTimeIncome) { saveData("onetimeincome", data.oneTimeIncome); setOneTimeIncome(data.oneTimeIncome); }
-        if (data.snapshots) { saveData("snapshots", data.snapshots); setSnapshots(data.snapshots); }
+        if (data.snapshots) { const sorted = [...data.snapshots].sort((a, b) => (a.ts || 0) - (b.ts || 0)); saveData("snapshots", sorted); setSnapshots(sorted); }
         if (data.food) { saveData("food", data.food); setFood(data.food); }
         if (data.payday) saveData("payday", data.payday);
         if (data.savingsGoal) saveData("savingsGoal", data.savingsGoal);
