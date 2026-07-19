@@ -196,7 +196,7 @@ function PageGlow({ idx }) {
         <div key={i} style={{
           position: "absolute", width: 460, height: 460, borderRadius: "50%",
           background: `radial-gradient(circle closest-side, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 0%, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 12%, transparent 100%)`,
-          ...g, gold: undefined,
+          ...(({ gold, ...pos }) => pos)(g),
         }} />
       ))}
     </div>
@@ -1469,7 +1469,7 @@ export default function App() {
 
   return (
     <div style={{ width: "100%", boxSizing: "border-box", height: "100vh", background: BG, display: "flex", flexDirection: "column", fontFamily: "'Noto Sans TC', sans-serif", overflowX: "hidden" }}>
-      <div style={{ padding: "52px 20px 8px", flexShrink: 0, position: "relative", zIndex: 2 }}>
+      <div style={{ padding: "52px 20px 8px", flexShrink: 0, position: "relative", zIndex: 20 }}>
         <div style={{ fontSize: 13, color: "var(--sub)", marginBottom: 2 }}>
           {new Date().toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}
         </div>
