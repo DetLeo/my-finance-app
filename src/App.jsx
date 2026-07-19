@@ -4,7 +4,7 @@ import {
   Landmark, BarChart2, DollarSign, ArrowLeftRight,
   ArrowDownCircle, ArrowUpCircle, CalendarMinus, CalendarPlus,
   Camera, ClipboardList, Save, ChevronRight,
-  Sun, Palmtree, HardDrive, Upload, Download, Lightbulb, X
+  Sun, Palmtree, Settings, Upload, Download, Lightbulb, X
 } from "lucide-react";
 
 const SAGE = "var(--sage)";
@@ -1101,6 +1101,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food, 
   const [startAssets, setStartAssets] = useState(Math.round(totalTWD));
 
   useEffect(() => { saveData("payday", payday); }, [payday]);
+  useEffect(() => { setStartAssets(Math.round(totalTWD)); }, [totalTWD]);
 
   const foodMonthly = calcFoodMonthly(food);
   const totalExpense = expenses.reduce((s, e) => s + e.amount, 0) + foodMonthly;
@@ -1118,7 +1119,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food, 
       firstM += 1;
       if (firstM > 11) { firstM = 0; firstY += 1; }
     }
-    const firstPaydayDate = new Date(firstY, firstM, payday);
+    const firstPaydayDate = new Date(firstY, firstM, Math.min(payday, new Date(firstY, firstM + 1, 0).getDate()));
     const daysToFirst = Math.max(0, Math.round((firstPaydayDate - todayMid) / 86400000));
 
     let runningAssets = startAssets;
@@ -1164,7 +1165,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food, 
       return {
         month: MONTHS[monthIndex], calMonth, year,
         assets: Math.max(0, Math.round(runningAssets)),
-        paydayDate: `${year}/${calMonth}/${payday}`,
+        paydayDate: `${year}/${calMonth}/${Math.min(payday, new Date(year, calMonth, 0).getDate())}`,
         net: netMonthly,
         isPartial: i === 0,
         partialDays: daysToFirst,
@@ -1183,7 +1184,7 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food, 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "var(--text2)", fontFamily: "'Noto Sans TC', sans-serif" }}>起始總資產</span>
-            <input type="number" defaultValue={startAssets} onBlur={e => setStartAssets(parseInt(e.target.value) || 0)}
+            <input key={"sa-" + Math.round(totalTWD)} type="number" defaultValue={startAssets} onBlur={e => setStartAssets(parseInt(e.target.value) || 0)}
               style={{ ...inputStyle, width: 130, textAlign: "right" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1235,6 +1236,12 @@ function ForecastPage({ expenses, income, assets, oneTime, oneTimeIncome, food, 
 export default function App() {
   const [pageIndex, setPageIndex] = useState(0);
   const [showBackup, setShowBackup] = useState(false);
+  const [theme, setTheme] = useState(() => loadData("appTheme", "sage"));
+  useEffect(() => {
+    saveData("appTheme", theme);
+    if (theme === "sage") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
   const [assets, setAssets]               = useState(() => loadData("assets", DEFAULT_ASSETS));
   const [expenses, setExpenses]           = useState(() => loadData("expenses", DEFAULT_EXPENSES));
   const [income, setIncome]               = useState(() => loadData("income", DEFAULT_INCOME));
@@ -1303,6 +1310,7 @@ export default function App() {
       payday: loadData("payday", 25),
       savingsGoal: loadData("savingsGoal", 500000),
       currencyRates: rates,
+      appTheme: theme,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1330,6 +1338,7 @@ export default function App() {
         if (data.payday) saveData("payday", data.payday);
         if (data.savingsGoal) saveData("savingsGoal", data.savingsGoal);
         if (data.currencyRates) { saveData("currencyRates", data.currencyRates); setRates(data.currencyRates); }
+        if (data.appTheme) setTheme(data.appTheme);
         alert("匯入成功！");
       } catch { alert("檔案格式錯誤"); }
     };
@@ -1368,14 +1377,31 @@ export default function App() {
         </div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", lineHeight: 1.5 }}>{pageGreetings[pageIndex]}</div>
         <button onClick={() => setShowBackup(p => !p)} style={{ position: "absolute", top: 52, right: 20, border: "none", background: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: 0 }}>
-          <HardDrive size={20} color={SAGE} />
-          <span style={{ fontSize: 9, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 600 }}>備份/還原</span>
+          <Settings size={20} color={SAGE} />
+          <span style={{ fontSize: 9, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 600 }}>設定</span>
         </button>
         {showBackup && (
           <div onClick={() => setShowBackup(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
         )}
         {showBackup && (
           <div style={{ position: "absolute", top: 90, right: 20, background: "var(--input)", borderRadius: 14, border: "var(--card-border)", borderTop: "var(--card-top)", boxShadow: "0 8px 24px rgba(0,0,0,0.18)", padding: "8px 0", zIndex: 100, minWidth: 150 }}>
+            <div style={{ padding: "10px 16px 4px", fontSize: 11, color: "var(--sub2)", fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 700 }}>主題</div>
+            <div style={{ display: "flex", gap: 10, padding: "4px 16px 12px" }}>
+              {[
+                { key: "sage", color: "#5C6E52" },
+                { key: "blue", color: "#6582A4" },
+                { key: "moss", color: "#6E7976" },
+                { key: "sunset", color: "#CC9477" },
+                { key: "navy", color: "#5A6976" },
+              ].map(t => (
+                <div key={t.key} onClick={() => setTheme(t.key)}
+                  style={{ width: 26, height: 26, borderRadius: 99, background: t.color, cursor: "pointer",
+                    border: theme === t.key ? "2.5px solid var(--text)" : "2.5px solid transparent",
+                    boxSizing: "border-box" }} />
+              ))}
+            </div>
+            <div style={{ height: 1, background: "var(--line)", margin: "0 12px" }} />
+            <div style={{ padding: "10px 16px 4px", fontSize: 11, color: "var(--sub2)", fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 700 }}>備份</div>
             <button onClick={() => { handleExport(); setShowBackup(false); }} style={{ width: "100%", padding: "12px 16px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text)", fontFamily: "'Noto Sans TC', sans-serif" }}>
               <Upload size={16} color={SAGE} />
               匯出備份

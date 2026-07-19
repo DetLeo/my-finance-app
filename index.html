@@ -26,25 +26,30 @@
         --hero-top: 1px solid transparent;
         --gold-text-grad: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
       }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --sage: #d4b483; --sage-dark: #8a7347;
-          --bg: #0f0f0e; --card: #1f1f1d;
-          --red: #e08578; --gold: #d4b483; --blue: #8fa8b8; --purple: #a89bb5;
-          --text: #ebe8e2; --text2: #cfccc4; --sub: #96938a; --sub2: #79766d; --faint: #5e5c54;
-          --line: #30302c; --tabbg: #2b2b28; --track: #3a3a35;
-          --input: #2b2b28; --inputborder: #45453f; --btn-muted: #383834;
-          --green-soft: #33302a; --red-soft: #3d2a26; --gold-soft: #383226;
-          --purple-soft: #322e38; --blue-soft: #2a3138; --pill: #33302a;
-          --sage-22: #363126; --sage-44: #55492f;
-          --nav-bg: rgba(28,28,26,0.95);
-          --card-border: 1px solid #2d2d29;
-          --card-top: 1px solid #3a3a34;
-          --shadow: none;
-          --hero-grad: linear-gradient(150deg, #23211c 0%, #3a3324 55%, #2a2620 100%);
-          --hero-top: 1px solid rgba(212,180,131,0.35);
-          --gold-text-grad: linear-gradient(180deg, #e8cf9e 0%, #c4a26b 100%);
-        }
+      
+      /* 主題：靜謐灰藍 */
+      :root[data-theme="blue"] {
+        --sage: #6582A4; --sage-dark: #52708f;
+        --green-soft: #e7edf4; --pill: #e9eff5; --sage-22: #dbe4ee; --sage-44: #b6c8dc;
+        --hero-grad: linear-gradient(135deg, #52708f 0%, #6582A4 100%);
+      }
+      /* 主題：柔和綠棕 */
+      :root[data-theme="moss"] {
+        --sage: #6E7976; --sage-dark: #5a6663;
+        --green-soft: #e9edec; --pill: #eaeeed; --sage-22: #dde3e2; --sage-44: #bcc7c4;
+        --hero-grad: linear-gradient(135deg, #5a6663 0%, #6E7976 100%);
+      }
+      /* 主題：落日暗橙 */
+      :root[data-theme="sunset"] {
+        --sage: #CC9477; --sage-dark: #b07d62;
+        --green-soft: #f7ece5; --pill: #f6ede7; --sage-22: #f0e0d5; --sage-44: #e0c2ac;
+        --hero-grad: linear-gradient(135deg, #b07d62 0%, #CC9477 100%);
+      }
+      /* 主題：深海藏藍 */
+      :root[data-theme="navy"] {
+        --sage: #5A6976; --sage-dark: #4a5762;
+        --green-soft: #e8ebee; --pill: #e9edf0; --sage-22: #dce1e6; --sage-44: #b8c2cb;
+        --hero-grad: linear-gradient(135deg, #4a5762 0%, #5A6976 100%);
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-variant-numeric: tabular-nums; }
@@ -60,6 +65,12 @@
         font-size: 16px !important;
       }
     </style>
+    <script>
+      try {
+        const t = JSON.parse(localStorage.getItem('appTheme'));
+        if (t && t !== 'sage') document.documentElement.setAttribute('data-theme', t);
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

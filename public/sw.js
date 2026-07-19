@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finance-app-v2';
+const CACHE_NAME = 'finance-app-v3';
 const BASE = '/my-finance-app';
 
 // 安裝：預快取核心檔案
