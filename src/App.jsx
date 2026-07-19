@@ -181,7 +181,7 @@ function CombinedOneTimeList({ expenseItems, incomeItems }) {
   );
 }
 
-function SwipeContainer({ pageIndex, setPageIndex, children, driveRef }) {
+function SwipeContainer({ pageIndex, setPageIndex, children }) {
   const containerRef = useRef(null);
   const wrapperRef = useRef(null);
   const startXRef = useRef(null);
@@ -259,20 +259,6 @@ function SwipeContainer({ pageIndex, setPageIndex, children, driveRef }) {
   }, []);
 
   useEffect(() => { setTranslate(-pageIndex * WIDTH, true); }, [pageIndex]);
-
-  useEffect(() => {
-    if (!driveRef) return;
-    driveRef.current = {
-      drag: (frac) => {
-        const max = (PAGES.length - 1) * WIDTH;
-        setTranslate(-Math.max(0, Math.min(1, frac)) * max, false);
-      },
-      settle: (idx) => {
-        setPageIndex(idx);
-        setTranslate(-idx * WIDTH, true);
-      },
-    };
-  }, [driveRef]);
 
   return (
     <div ref={wrapperRef} style={{ overflow: "hidden", flex: 1, position: "relative" }}>
@@ -1251,10 +1237,14 @@ export default function App() {
   const [pageIndex, setPageIndex] = useState(0);
   const [showBackup, setShowBackup] = useState(false);
   const [theme, setTheme] = useState(() => loadData("appTheme", "sage"));
-  const swipeDrive = useRef(null);
   const navRef = useRef(null);
   const scrubRef = useRef({ active: false, startX: 0, moved: false });
+  const [previewIdx, setPreviewIdx] = useState(null);
 
+  const idxFromX = (x) => {
+    const r = navRef.current.getBoundingClientRect();
+    return Math.max(0, Math.min(PAGES.length - 1, Math.floor(((x - r.left) / r.width) * PAGES.length)));
+  };
   const navTouchStart = (e) => {
     scrubRef.current = { active: true, startX: e.touches[0].clientX, moved: false };
   };
@@ -1265,19 +1255,15 @@ export default function App() {
     if (!s.moved && Math.abs(x - s.startX) < 8) return;
     s.moved = true;
     e.preventDefault();
-    const r = navRef.current.getBoundingClientRect();
-    const frac = (x - r.left) / r.width;
-    const idx = Math.max(0, Math.min(PAGES.length - 1, Math.floor(frac * PAGES.length)));
-    setPageIndex(idx);
-    swipeDrive.current?.drag((x - r.left - r.width / (PAGES.length * 2)) / (r.width * (PAGES.length - 1) / PAGES.length));
+    setPreviewIdx(idxFromX(x));
   };
   const navTouchEnd = () => {
     const s = scrubRef.current;
-    if (s.active && s.moved) swipeDrive.current?.settle(pageIndexRefApp.current);
+    if (s.active && s.moved && previewIdx !== null) setPageIndex(previewIdx);
+    setPreviewIdx(null);
     scrubRef.current.active = false;
   };
-  const pageIndexRefApp = useRef(pageIndex);
-  useEffect(() => { pageIndexRefApp.current = pageIndex; }, [pageIndex]);
+
   useEffect(() => {
     saveData("appTheme", theme);
     if (theme === "sage") document.documentElement.removeAttribute("data-theme");
@@ -1457,7 +1443,7 @@ export default function App() {
         )}
       </div>
 
-      <SwipeContainer pageIndex={pageIndex} setPageIndex={setPageIndex} driveRef={swipeDrive}>
+      <SwipeContainer pageIndex={pageIndex} setPageIndex={setPageIndex}>
         {pages.map((page, i) => (
           <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 140px", flexShrink: 0 }}>
             {page}
@@ -1467,7 +1453,7 @@ export default function App() {
 
       <div ref={navRef} onTouchStart={navTouchStart} onTouchMove={navTouchMove} onTouchEnd={navTouchEnd} style={{ position: "fixed", bottom: 20, left: 16, right: 16, background: "var(--nav-bg)", touchAction: "none", backdropFilter: "blur(16px)", border: "var(--card-border)", borderTop: "var(--card-top)", borderRadius: 99, display: "flex", padding: "4px 6px", flexShrink: 0, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}>
         {navItems.map((item, i) => (
-          <NavItem key={i} icon={item.icon} label={item.label} active={pageIndex === i} onClick={() => setPageIndex(i)} />
+          <NavItem key={i} icon={item.icon} label={item.label} active={(previewIdx !== null ? previewIdx : pageIndex) === i} onClick={() => setPageIndex(i)} />
         ))}
       </div>
     </div>
