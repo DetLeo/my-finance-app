@@ -25,28 +25,34 @@
         --hero-grad: linear-gradient(135deg, #4a5942 0%, #5C6E52 100%);
         --hero-top: 1px solid transparent;
         --gold-text-grad: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
+        --glow-a: rgba(92,110,82,0.16);
+        --glow-b: rgba(181,135,58,0.10);
       }
       
       /* 主題：靜謐灰藍 */
       :root[data-theme="blue"] {
+        --glow-a: rgba(101,130,164,0.16);
         --sage: #6582A4; --sage-dark: #52708f;
         --green-soft: #e7edf4; --pill: #e9eff5; --sage-22: #dbe4ee; --sage-44: #b6c8dc;
         --hero-grad: linear-gradient(135deg, #52708f 0%, #6582A4 100%);
       }
       /* 主題：柔和綠棕 */
       :root[data-theme="moss"] {
+        --glow-a: rgba(110,121,118,0.16);
         --sage: #6E7976; --sage-dark: #5a6663;
         --green-soft: #e9edec; --pill: #eaeeed; --sage-22: #dde3e2; --sage-44: #bcc7c4;
         --hero-grad: linear-gradient(135deg, #5a6663 0%, #6E7976 100%);
       }
       /* 主題：落日暗橙 */
       :root[data-theme="sunset"] {
+        --glow-a: rgba(204,148,119,0.16);
         --sage: #CC9477; --sage-dark: #b07d62;
         --green-soft: #f7ece5; --pill: #f6ede7; --sage-22: #f0e0d5; --sage-44: #e0c2ac;
         --hero-grad: linear-gradient(135deg, #b07d62 0%, #CC9477 100%);
       }
       /* 主題：深海藏藍 */
       :root[data-theme="navy"] {
+        --glow-a: rgba(90,105,118,0.16);
         --sage: #5A6976; --sage-dark: #4a5762;
         --green-soft: #e8ebee; --pill: #e9edf0; --sage-22: #dce1e6; --sage-44: #b8c2cb;
         --hero-grad: linear-gradient(135deg, #4a5762 0%, #5A6976 100%);
@@ -85,7 +91,7 @@
         if (t && t !== 'sage') document.documentElement.setAttribute('data-theme', t);
       } catch {}
     </script>
-    <script type="module" crossorigin src="./assets/index-b8a2a200.js"></script>
+    <script type="module" crossorigin src="./assets/index-868c5fa8.js"></script>
     <link rel="stylesheet" href="./assets/index-04490b11.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
