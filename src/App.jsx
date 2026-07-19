@@ -181,6 +181,28 @@ function CombinedOneTimeList({ expenseItems, incomeItems }) {
   );
 }
 
+const PAGE_GLOWS = [
+  [{ top: "-6%", left: "-18%" }, { top: "34%", right: "-22%", gold: true }],
+  [{ bottom: "4%", right: "-20%" }, { bottom: "-8%", left: "-16%", gold: true }],
+  [{ top: "28%", left: "-20%" }, { bottom: "-6%", right: "-18%", gold: true }],
+  [{ top: "-8%", right: "-18%" }, { bottom: "0%", left: "-20%", gold: true }],
+  [{ bottom: "-4%", left: "-18%" }, { top: "-6%", right: "-20%", gold: true }],
+];
+
+function PageGlow({ idx }) {
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
+      {PAGE_GLOWS[idx].map((g, i) => (
+        <div key={i} style={{
+          position: "absolute", width: 340, height: 340, borderRadius: "50%",
+          background: `radial-gradient(circle, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 0%, transparent 68%)`,
+          ...g, gold: undefined,
+        }} />
+      ))}
+    </div>
+  );
+}
+
 function SwipeContainer({ pageIndex, setPageIndex, children }) {
   const containerRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -1459,8 +1481,9 @@ export default function App() {
 
       <SwipeContainer pageIndex={pageIndex} setPageIndex={setPageIndex}>
         {pages.map((page, i) => (
-          <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 140px", flexShrink: 0 }}>
-            {page}
+          <div key={i} style={{ width: `${100 / PAGES.length}%`, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "10px 20px 140px", flexShrink: 0, position: "relative" }}>
+            <PageGlow idx={i} />
+            <div style={{ position: "relative", zIndex: 1 }}>{page}</div>
           </div>
         ))}
       </SwipeContainer>
