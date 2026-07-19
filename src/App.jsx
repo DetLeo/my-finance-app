@@ -313,9 +313,9 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ background: "var(--hero-grad)", borderTop: "var(--hero-top)", borderRadius: 18, padding: "24px 22px", color: "#fff" }}>
-        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4, fontFamily: "'Noto Sans TC', sans-serif" }}>總資產（折合台幣）</div>
-        <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: -1, fontFamily: "'Noto Sans TC', sans-serif", background: "var(--gold-text-grad)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{formatNT(totalTWD)}</div>
+      <div style={{ background: "var(--hero-grad)", borderTop: "var(--hero-top)", borderRadius: 18, padding: "28px 24px", color: "#fff" }}>
+        <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 8, letterSpacing: 1, fontFamily: "'Noto Sans TC', sans-serif" }}>總資產（折合台幣）</div>
+        <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, fontFamily: "'Noto Sans TC', sans-serif", background: "var(--gold-text-grad)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{formatNT(totalTWD)}</div>
         <div style={{ display: "flex", gap: 3, marginTop: 14, borderRadius: 99, overflow: "hidden", height: 8 }}>
           {ASSET_TYPES.map(t => (
             <div key={t.key} style={{ flex: typeTotals[t.key] || 0.001, background: t.key === "cash" ? "rgba(255,255,255,0.85)" : t.key === "stock" ? "rgba(255,255,255,0.6)" : t.key === "ustock" ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.25)" }} />
@@ -698,7 +698,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ background: "var(--hero-grad)", borderTop: "var(--hero-top)", borderRadius: 18, padding: "24px 22px", color: "#fff" }}>
+      <div style={{ background: "var(--hero-grad)", borderTop: "var(--hero-top)", borderRadius: 18, padding: "28px 24px", color: "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <UtensilsCrossed size={16} color="rgba(255,255,255,0.8)" />
           <span style={{ fontSize: 13, opacity: 0.8, fontFamily: "'Noto Sans TC', sans-serif" }}>本月伙食費估算</span>
@@ -1402,7 +1402,7 @@ export default function App() {
         <div style={{ fontSize: 13, color: "var(--sub)", marginBottom: 2 }}>
           {new Date().toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}
         </div>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", lineHeight: 1.5 }}>{pageGreetings[pageIndex]}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", lineHeight: 1.5 }}>{pageGreetings[pageIndex]}</div>
         <button onClick={() => setShowBackup(p => !p)} style={{ position: "absolute", top: 52, right: 20, border: "none", background: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: 0 }}>
           <Settings size={20} color={SAGE} />
           <span style={{ fontSize: 9, color: SAGE, fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 600 }}>設定</span>
