@@ -183,7 +183,7 @@ function CombinedOneTimeList({ expenseItems, incomeItems }) {
 
 const PAGE_GLOWS = [
   [{ top: "-6%", left: "-18%" }, { top: "34%", right: "-22%", gold: true }],
-  [{ bottom: "4%", right: "-20%" }, { bottom: "-8%", left: "-16%", gold: true }],
+  [{ top: "2%", right: "-20%" }, { bottom: "-6%", left: "-16%", gold: true }],
   [{ top: "28%", left: "-20%" }, { bottom: "-6%", right: "-18%", gold: true }],
   [{ top: "-8%", right: "-18%" }, { bottom: "0%", left: "-20%", gold: true }],
   [{ bottom: "-4%", left: "-18%" }, { top: "-6%", right: "-20%", gold: true }],
@@ -195,7 +195,7 @@ function PageGlow({ idx }) {
       {PAGE_GLOWS[idx].map((g, i) => (
         <div key={i} style={{
           position: "absolute", width: 460, height: 460, borderRadius: "50%",
-          background: `radial-gradient(circle closest-side, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 0%, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 25%, transparent 100%)`,
+          background: `radial-gradient(circle closest-side, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 0%, ${g.gold ? "var(--glow-b)" : "var(--glow-a)"} 12%, transparent 100%)`,
           ...g, gold: undefined,
         }} />
       ))}
