@@ -396,9 +396,7 @@ function OverviewPage({ expenses, income, assets, snapshots, onSaveSnapshot, one
             </div>
           ))}
         </div>
-      </Card>
-
-      <Card>
+        <div style={{ height: 1, background: "var(--line)", margin: "18px -20px" }} />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <TrendingUp size={16} color={SAGE} />
